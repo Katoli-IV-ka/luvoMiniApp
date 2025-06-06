@@ -1,16 +1,42 @@
-DATABASE_URL = "postgresql+asyncpg://postgres:ваш_пароль@localhost/dating_app"
+# backend/main.py
+from fastapi import FastAPI
 
-import asyncpg
+from core.config import settings
+from core.database import engine
+from models.base import Base
 
-async def test_connection():
-    conn = await asyncpg.connect(
-        user='postgres',
-        password='94044024p',
-        database='luvoMiniApp',
-        host='localhost'
-    )
-    print("Подключение успешно!")
-    await conn.close()
+# Импортируем все модели, чтобы SQLAlchemy знала обо всех таблицах
+from models.user import User
+from models.profile import Profile
+from models.photo import Photo
+from models.like import Like
+from models.match import Match
+from models.feed_view import FeedView
+from models.instagram_data import InstagramData
 
-import asyncio
-asyncio.run(test_connection())
+from routers.auth import router as auth_router
+from routers.profile import router as profile_router
+from routers.feed import router as feed_router
+
+app = FastAPI(
+    title="Luvo MiniApp Backend",
+    version="0.1.0",
+    description="Backend для Telegram Mini-App «Luvo»"
+)
+
+app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(feed_router)
+
+@app.on_event("startup")
+async def on_startup():
+    """
+    При старте приложения создаём все таблицы (если их нет) на основе Base.metadata.
+    """
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+@app.get("/")
+async def root():
+    return {"message": "Luvo MiniApp Backend запущен. Версия 0.1.0"}
