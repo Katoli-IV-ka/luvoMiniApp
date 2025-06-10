@@ -27,6 +27,7 @@ class UserCreate(UserBase):
 # -------------------------------
 class UserRead(UserBase):
     id: int = Field(..., description="PK в базе данных")
+    telegram_username: Optional[str]
     is_premium: bool = Field(..., description="Признак премиума")
     premium_expires_at: Optional[datetime] = Field(
         None, description="Дата окончания подписки (если премиум)"

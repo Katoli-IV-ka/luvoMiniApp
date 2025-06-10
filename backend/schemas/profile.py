@@ -40,9 +40,9 @@ class ProfileRead(ProfileBase):
     created_at: datetime = Field(..., description="Дата и время создания профиля")
 
     # Схемы всех фото, если потребуется возвращать список их URL или ключей:
-    #photos: Optional[List[str]] = Field(
-    #    None, description="Список s3_key загруженных фото"
-    #)
+    photos: Optional[List[str]] = Field(
+        None, description="Список s3_key загруженных фото"
+    )
 
     class Config:
         orm_mode = True

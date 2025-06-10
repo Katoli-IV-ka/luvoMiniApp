@@ -11,7 +11,9 @@ class Profile(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
-    first_name = Column(String(length=100), nullable=False)
+    first_name = Column(String(100), nullable=False)
+    instagram_username = Column(String(64), nullable=True)  # Instagram username
+    telegram_username = Column(String(64), nullable=True)  # Telegram username
     birthdate = Column(Date, nullable=True)    # Можно хранить дату рождения
     gender = Column(String(length=10), nullable=True)  # Например: "male", "female", "other"
     about = Column(Text, nullable=True)
@@ -24,4 +26,4 @@ class Profile(Base):
     user = relationship("User", backref="profile", uselist=False)
 
     def __repr__(self):
-        return f"<Profile id={self.id} user_id={self.user_id}>"
+        return f"<Profile user_id={self.user_id} instagram={self.instagram_username}>"
