@@ -4,7 +4,6 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-
 # -------------------------------
 # 1) Базовая схема (ProfileBase)
 # -------------------------------
@@ -13,41 +12,29 @@ class ProfileBase(BaseModel):
     birthdate: Optional[date] = Field(None, description="Дата рождения (YYYY-MM-DD)")
     gender: Optional[str] = Field(None, max_length=10, description="Пол: 'male', 'female', 'other'")
     about: Optional[str] = Field(None, description="О себе (текстовое описание)")
-    telegram_username: Optional[str] = Field(None, max_length=64, description="Юзернэйм в Telegram")
-    instagram_username: Optional[str] = Field(None, max_length=64, description="Юзернэйм в Instagram")
-
-    # Можно добавить latitude, longitude, когда будем внедрять геолокацию:
-    latitude: Optional[float] = Field(None, description="Широта пользователя")
-    longitude: Optional[float] = Field(None, description="Долгота пользователя")
+    # Можно добавить latitude, longitude, когда будет геолокация:
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 # -------------------------------
-# 2) Схема для создания профиля (ProfileCreate)
-#    (при создании указываем user_id + данные из ProfileBase)
+# 2) Схема для создания (Onboarding)
 # -------------------------------
 class ProfileCreate(ProfileBase):
-    # user_id приходит из токена (payload),
-    # поэтому лучше его не передавать в теле запроса,
-    # а извлекать на сервере из авторизационного токена.
-    # Но если потребуется, можно раскомментировать:
-    # user_id: int = Field(..., description="ID пользователя (из token)")
-    pass
+    telegram_username: str = Field(..., max_length=64, description="Telegram username")
+    instagram_username: Optional[str] = Field(None, max_length=64, description="Instagram username")
 
 
 # -------------------------------
-# 3) Схема для чтения профиля (ProfileRead)
+# 3) Схема для чтения (Response)
 # -------------------------------
 class ProfileRead(ProfileBase):
-    id: int = Field(..., description="PK профиля")
-    user_id: int = Field(..., description="ID пользователя (из таблицы users)")
-    telegram_username: Optional[str]
+    id: int
+    user_id: int
+    telegram_username: str
     instagram_username: Optional[str]
-    created_at: datetime = Field(..., description="Дата и время создания профиля")
-
-    # Схемы всех фото, если потребуется возвращать список их URL или ключей:
-    photos: Optional[List[str]] = Field(
-        None, description="Список s3_key загруженных фото"
-    )
+    photos: List[str] = Field(..., description="Список URL фотографий профиля")
+    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -57,12 +44,12 @@ class ProfileRead(ProfileBase):
 # 4) Схема для обновления (ProfileUpdate)
 # -------------------------------
 class ProfileUpdate(BaseModel):
-    telegram_username: Optional[str] = Field(None, max_length=64)
-    instagram_username: Optional[str] = Field(None, max_length=64)
     first_name: Optional[str] = Field(None, max_length=100)
     birthdate: Optional[date] = None
     gender: Optional[str] = Field(None, max_length=10)
     about: Optional[str] = None
+    instagram_username: Optional[str] = Field(None, max_length=64)
+    telegram_username: Optional[str] = Field(None, max_length=64)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 

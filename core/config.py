@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     AWS_S3_BUCKET_NAME: str
     AWS_S3_ENDPOINT_URL: str
     AWS_S3_REGION: str
+    SECRET_KEY: str
 
 
 
