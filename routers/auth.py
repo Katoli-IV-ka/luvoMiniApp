@@ -52,7 +52,7 @@ async def login(
 
     # 3) генерируем JWT
     token_payload = {"user_id": user.id}
-    access_token = jwt.encode(token_payload, settings.SECRET_KEY, algorithm="HS256")
+    access_token = jwt.encode(token_payload, settings.TELEGRAM_BOT_TOKEN, algorithm="HS256")
 
     # 4) проверяем, есть ли профиль
     stmt_profile = select(Profile.id).where(Profile.user_id == user.id).limit(1)
@@ -77,7 +77,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, settings.TELEGRAM_BOT_TOKEN, algorithms=["HS256"])
         user_id: int = payload.get("user_id")
         if user_id is None:
             raise credentials_exception

@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     AWS_S3_REGION: str
 
 
-
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
