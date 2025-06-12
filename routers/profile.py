@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from datetime import date
 from typing import List, Optional
 
@@ -117,29 +118,39 @@ async def read_my_profile(
     )
 
 
-@router.patch(
-    "/",
+
+
+@router.get(
+    "/me",
     response_model=ProfileRead,
-    summary="Редактировать профиль"
+    summary="Получить свой профиль"
 )
-async def update_profile(
-    profile_in: ProfileUpdate,
-    current_user: User = Depends(get_current_user),
+async def read_my_profile(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    profile = current_user.profile
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+    # 1) получаем пользователя вместе с profile и profile.photos сразу
+    stmt = (
+        select(User)
+        .options(
+            selectinload(User.profile).selectinload(Profile.photos)
+        )
+        .where(User.id == current_user.id)
+    )
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    if not user or not user.profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    profile = user.profile
 
-    for field, value in profile_in.dict(exclude_unset=True).items():
-        setattr(profile, field, value)
-    db.add(profile)
-    await db.commit()
-    await db.refresh(profile)
-
+    # 2) собираем URL фотографий
     base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
     bucket = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [f"{base_url}/{bucket}/{p.s3_key}" for p in profile.photos if p.is_active]
+    photo_urls = [
+        f"{base_url}/{bucket}/{p.s3_key}"
+        for p in profile.photos
+        if p.is_active
+    ]
 
     return ProfileRead(
         id=profile.id,
@@ -153,6 +164,7 @@ async def update_profile(
         photos=photo_urls,
         created_at=profile.created_at,
     )
+
 
 
 @router.post(
