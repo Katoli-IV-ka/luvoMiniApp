@@ -2,18 +2,17 @@
 import json
 
 from fastapi import APIRouter
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
-
-from core.config import settings
-from core.database import get_db
-from core.security import verify_init_data
-from models.user import User
-from models.profile import Profile
 from schemas.auth import TokenResponse, InitDataSchema
 from schemas.user import UserRead, UserCreate
 from models.profile import Profile
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from core.security import verify_init_data
+from core.config import settings
+from core.database import get_db
+from models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -68,7 +67,10 @@ async def login(
     )
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme),db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -90,21 +92,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme),db: AsyncSession 
     return user
 
 
-@router.get("/me", response_model=UserRead)
-async def get_current_user(
-    # В реальности сюда передавался бы декодированный токен с telegram_user_id
-    telegram_user_id: int,
+@router.get(
+    "/me",
+    response_model=TokenResponse,
+    summary="Проверить JWT и узнать, существует ли профиль"
+)
+async def whoami(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(User).where(User.telegram_user_id == telegram_user_id)
+    # Явная проверка наличия профиля через отдельный запрос
+    stmt = select(Profile).where(Profile.user_id == current_user.id)
     result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    has_profile = result.scalar_one_or_none() is not None
 
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    print(user)
-    return user
+    return TokenResponse(
+        access_token="",           # или можно не возвращать access_token здесь вовсе
+        token_type="bearer",
+        has_profile=has_profile,
+    )
 
 
 @router.post("/register", response_model=UserRead)

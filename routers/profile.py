@@ -8,11 +8,11 @@ from typing import List, Optional
 
 from core.database import get_db
 from core.config import settings
-from routers.auth import get_current_user             # Dependency из auth.py
+from routers.auth import get_current_user
 from models.user import User
 from models.profile import Profile
 from models.photo import Photo
-from schemas.profile import ProfileCreate, ProfileRead, ProfileUpdate
+from schemas.profile import ProfileRead, ProfileCreate, ProfileUpdate
 from utils.s3 import upload_file_to_s3
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -35,14 +35,13 @@ async def create_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # 1. Проверяем, что профиль ещё не создан
-    if current_user.profile:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Profile already exists"
-        )
+    # Явно проверяем, есть ли профиль в БД
+    stmt = select(Profile).where(Profile.user_id == current_user.id)
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=400, detail="Profile already exists")
 
-    # 2. Создаем запись Profile
     profile = Profile(
         user_id=current_user.id,
         first_name=first_name,
@@ -56,28 +55,24 @@ async def create_profile(
     await db.commit()
     await db.refresh(profile)
 
-    # 3. Загружаем главное фото в S3
+    # Загружаем главное фото
     try:
         s3_key = upload_file_to_s3(file.file, file.filename, settings.AWS_S3_BUCKET_NAME)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload photo: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+
     photo = Photo(profile_id=profile.id, s3_key=s3_key, is_active=True)
     db.add(photo)
     await db.commit()
-    await db.refresh(photo)
 
-    # 4. Собираем публичные URL всех активных фото
-    base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
+    # Составляем список URL фотографий
+    base = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
     bucket = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [
-        f"{base_url}/{bucket}/{p.s3_key}"
-        for p in profile.photos if p.is_active
-    ]
+    stmt_photos = select(Photo).where(Photo.profile_id == profile.id, Photo.is_active == True)
+    res_ph = await db.execute(stmt_photos)
+    photos = res_ph.scalars().all()
+    photo_urls = [f"{base}/{bucket}/{ph.s3_key}" for ph in photos]
 
-    # 5. Формируем и возвращаем ProfileRead
     return ProfileRead(
         id=profile.id,
         user_id=profile.user_id,
@@ -95,7 +90,7 @@ async def create_profile(
 @router.get(
     "/me",
     response_model=ProfileRead,
-    summary="Получить собственный профиль"
+    summary="Получить свой профиль"
 )
 async def read_my_profile(
     current_user: User = Depends(get_current_user),
@@ -106,10 +101,7 @@ async def read_my_profile(
 
     base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
     bucket = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [
-        f"{base_url}/{bucket}/{p.s3_key}"
-        for p in profile.photos if p.is_active
-    ]
+    photo_urls = [f"{base_url}/{bucket}/{p.s3_key}" for p in profile.photos if p.is_active]
 
     return ProfileRead(
         id=profile.id,
@@ -128,7 +120,7 @@ async def read_my_profile(
 @router.patch(
     "/",
     response_model=ProfileRead,
-    summary="Редактировать данные профиля"
+    summary="Редактировать профиль"
 )
 async def update_profile(
     profile_in: ProfileUpdate,
@@ -147,10 +139,7 @@ async def update_profile(
 
     base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
     bucket = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [
-        f"{base_url}/{bucket}/{p.s3_key}"
-        for p in profile.photos if p.is_active
-    ]
+    photo_urls = [f"{base_url}/{bucket}/{p.s3_key}" for p in profile.photos if p.is_active]
 
     return ProfileRead(
         id=profile.id,
@@ -169,7 +158,7 @@ async def update_profile(
 @router.post(
     "/photos",
     response_model=List[str],
-    summary="Загрузить дополнительное фото (максимум 6 штук)"
+    summary="Загрузить доп. фото (до 6 штук)"
 )
 async def upload_photo(
     file: UploadFile = File(...),
@@ -187,7 +176,7 @@ async def upload_photo(
     try:
         s3_key = upload_file_to_s3(file.file, file.filename, settings.AWS_S3_BUCKET_NAME)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {e}")
 
     photo = Photo(profile_id=profile.id, s3_key=s3_key, is_active=True)
     db.add(photo)
@@ -196,10 +185,7 @@ async def upload_photo(
 
     base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
     bucket = settings.AWS_S3_BUCKET_NAME
-    return [
-        f"{base_url}/{bucket}/{p.s3_key}"
-        for p in profile.photos if p.is_active
-    ]
+    return [f"{base_url}/{bucket}/{p.s3_key}" for p in profile.photos if p.is_active]
 
 
 @router.delete(
@@ -212,12 +198,9 @@ async def delete_photo(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    profile = current_user.profile
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-
-    stmt = select(Photo).where(Photo.id == photo_id, Photo.profile_id == profile.id)
-    result = await db.execute(stmt)
+    result = await db.execute(
+        select(Photo).where(Photo.id == photo_id, Photo.profile_id == current_user.profile.id)
+    )
     photo = result.scalar_one_or_none()
     if not photo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
@@ -225,4 +208,3 @@ async def delete_photo(
     photo.is_active = False
     db.add(photo)
     await db.commit()
-    # 204 No Content → тело не возвращаем

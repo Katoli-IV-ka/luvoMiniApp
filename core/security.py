@@ -72,3 +72,4 @@ def verify_init_data(init_data: str, max_age_seconds: int = 86_400) -> dict:
 
     # Возвращаем все валидные поля (user, query_id, auth_date и т.д.)
     return data
+
