@@ -20,7 +20,7 @@ from models.instagram_data import InstagramData
 from routers.auth import router as auth_router
 from routers.profile import router as profile_router
 from routers.feed import router as feed_router
-from utils.reset_db import reset_database
+from utils.reset_db import async_reset_database
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -46,7 +46,8 @@ async def on_startup():
     При старте приложения создаём все таблицы (если их нет) на основе Base.metadata.
     """
     if os.getenv("RESET_DB_ON_STARTUP", "").lower() == "true":
-        reset_database()
+        # Асинхронный вызов
+        await async_reset_database()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
