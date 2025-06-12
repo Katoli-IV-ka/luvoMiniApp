@@ -129,27 +129,24 @@ async def read_my_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1) получаем пользователя вместе с profile и profile.photos сразу
+    # 1) вытягиваем Profile + все его photos в одном await
     stmt = (
-        select(User)
-        .options(
-            selectinload(User.profile).selectinload(Profile.photos)
-        )
-        .where(User.id == current_user.id)
+        select(Profile)
+        .options(selectinload(Profile.photos))
+        .where(Profile.user_id == current_user.id)
     )
     result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-    if not user or not user.profile:
+    profile = result.scalar_one_or_none()
+    if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    profile = user.profile
 
-    # 2) собираем URL фотографий
+    # 2) формируем URL только для активных фото
     base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
-    bucket = settings.AWS_S3_BUCKET_NAME
+    bucket   = settings.AWS_S3_BUCKET_NAME
     photo_urls = [
-        f"{base_url}/{bucket}/{p.s3_key}"
-        for p in profile.photos
-        if p.is_active
+        f"{base_url}/{bucket}/{photo.s3_key}"
+        for photo in profile.photos
+        if photo.is_active
     ]
 
     return ProfileRead(
