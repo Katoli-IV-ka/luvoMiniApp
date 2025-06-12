@@ -13,6 +13,9 @@ class ProfileBase(BaseModel):
     birthdate: Optional[date] = Field(None, description="Дата рождения (YYYY-MM-DD)")
     gender: Optional[str] = Field(None, max_length=10, description="Пол: 'male', 'female', 'other'")
     about: Optional[str] = Field(None, description="О себе (текстовое описание)")
+    telegram_username: Optional[str] = Field(None, max_length=64, description="Юзернэйм в Telegram")
+    instagram_username: Optional[str] = Field(None, max_length=64, description="Юзернэйм в Instagram")
+
     # Можно добавить latitude, longitude, когда будем внедрять геолокацию:
     latitude: Optional[float] = Field(None, description="Широта пользователя")
     longitude: Optional[float] = Field(None, description="Долгота пользователя")
@@ -37,6 +40,8 @@ class ProfileCreate(ProfileBase):
 class ProfileRead(ProfileBase):
     id: int = Field(..., description="PK профиля")
     user_id: int = Field(..., description="ID пользователя (из таблицы users)")
+    telegram_username: Optional[str]
+    instagram_username: Optional[str]
     created_at: datetime = Field(..., description="Дата и время создания профиля")
 
     # Схемы всех фото, если потребуется возвращать список их URL или ключей:
@@ -52,6 +57,8 @@ class ProfileRead(ProfileBase):
 # 4) Схема для обновления (ProfileUpdate)
 # -------------------------------
 class ProfileUpdate(BaseModel):
+    telegram_username: Optional[str] = Field(None, max_length=64)
+    instagram_username: Optional[str] = Field(None, max_length=64)
     first_name: Optional[str] = Field(None, max_length=100)
     birthdate: Optional[date] = None
     gender: Optional[str] = Field(None, max_length=10)

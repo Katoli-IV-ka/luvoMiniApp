@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from schemas.profile import ProfileRead
+
 
 # -------------------------------
 # 1) Общая базовая схема (UserBase)
@@ -27,12 +29,12 @@ class UserCreate(UserBase):
 # -------------------------------
 class UserRead(UserBase):
     id: int = Field(..., description="PK в базе данных")
-    telegram_username: Optional[str]
     is_premium: bool = Field(..., description="Признак премиума")
     premium_expires_at: Optional[datetime] = Field(
         None, description="Дата окончания подписки (если премиум)"
     )
     created_at: datetime = Field(..., description="Дата и время создания аккаунта")
+    profile: Optional[ProfileRead] = None
 
     class Config:
         orm_mode = True

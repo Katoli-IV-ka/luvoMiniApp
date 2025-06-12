@@ -14,6 +14,8 @@ class User(Base):
     is_premium = Column(Boolean, default=False, nullable=False)
     premium_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Изменено: используем back_populates вместо backref
     profile = relationship("Profile", back_populates="user", uselist=False)
 
     def __repr__(self):

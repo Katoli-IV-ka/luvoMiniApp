@@ -12,18 +12,17 @@ class Profile(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     first_name = Column(String(100), nullable=False)
-    instagram_username = Column(String(64), nullable=True)  # Instagram username
-    telegram_username = Column(String(64), nullable=True)  # Telegram username
-    birthdate = Column(Date, nullable=True)    # Можно хранить дату рождения
-    gender = Column(String(length=10), nullable=True)  # Например: "male", "female", "other"
+    instagram_username = Column(String(64), nullable=True)
+    telegram_username = Column(String(64), nullable=True)
+    birthdate = Column(Date, nullable=True)
+    gender = Column(String(length=10), nullable=True)
     about = Column(Text, nullable=True)
-    # В будущем: latitude, longitude для геолокации
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # Связь с User (если понадобится)
-    user = relationship("User", backref="profile", uselist=False)
+    # Изменено: используем back_populates вместо backref
+    user = relationship("User", back_populates="profile", uselist=False)
 
     def __repr__(self):
         return f"<Profile user_id={self.user_id} instagram={self.instagram_username}>"
