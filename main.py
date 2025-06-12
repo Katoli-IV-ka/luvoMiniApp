@@ -55,3 +55,7 @@ async def on_startup():
 @app.get("/")
 async def root():
     return {"message": "Luvo MiniApp Backend запущен. Версия 0.1.0"}
+
+@app.get("/ping")
+async def ping():
+    return {"pong": True}
