@@ -2,8 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, and_
 from datetime import date
 from typing import List, Optional
 
@@ -94,15 +93,27 @@ async def create_profile(
     summary="Получить свой профиль"
 )
 async def read_my_profile(
-    current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user),
 ):
-    profile = current_user.profile
+    prof_stmt = select(Profile).where(Profile.user_id == current_user.id)
+    profile = (await db.execute(prof_stmt)).scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
+    # 2) Явно запросим активные фото
+    photos_stmt = select(Photo).where(
+        and_(
+            Photo.profile_id == profile.id,
+            Photo.is_active.is_(True)
+        )
+    )
+    active_photos = (await db.execute(photos_stmt)).scalars().all()
+
+    # 3) Собираем URL-ы
+    base = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
     bucket = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [f"{base_url}/{bucket}/{p.s3_key}" for p in profile.photos if p.is_active]
+    photo_urls = [f"{base}/{bucket}/{p.s3_key}" for p in active_photos]
 
     return ProfileRead(
         id=profile.id,
@@ -119,7 +130,6 @@ async def read_my_profile(
 
 
 
-
 @router.get(
     "/me",
     response_model=ProfileRead,
@@ -129,26 +139,25 @@ async def read_my_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Подгружаем профиль и все его фото одним запросом
-    stmt = (
-        select(Profile)
-        .options(
-            selectinload(Profile.photos)  # <- заранее тащим все фото
-        )
-        .where(Profile.user_id == current_user.id)
-    )
-    result = await db.execute(stmt)
-    profile = result.scalar_one_or_none()
+    # 1) Получаем профиль
+    prof_stmt = select(Profile).where(Profile.user_id == current_user.id)
+    profile = (await db.execute(prof_stmt)).scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
-    bucket   = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [
-        f"{base_url}/{bucket}/{photo.s3_key}"
-        for photo in profile.photos  # здесь уже нет IO!
-        if photo.is_active
-    ]
+    # 2) Явно запросим активные фото
+    photos_stmt = select(Photo).where(
+        and_(
+            Photo.profile_id == profile.id,
+            Photo.is_active.is_(True)
+        )
+    )
+    active_photos = (await db.execute(photos_stmt)).scalars().all()
+
+    # 3) Собираем URL-ы
+    base = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
+    bucket = settings.AWS_S3_BUCKET_NAME
+    photo_urls = [f"{base}/{bucket}/{p.s3_key}" for p in active_photos]
 
     return ProfileRead(
         id=profile.id,

@@ -4,23 +4,13 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.config import settings
 from core.database import engine
 from models.base import Base
-
-# Импортируем все модели, чтобы SQLAlchemy знала обо всех таблицах
-from models.user import User
-from models.profile import Profile
-from models.photo import Photo
-from models.like import Like
-from models.match import Match
-from models.feed_view import FeedView
-from models.instagram_data import InstagramData
+from utils.drop_db import async_drop_database
 
 from routers.auth import router as auth_router
 from routers.profile import router as profile_router
 from routers.feed import router as feed_router
-from utils.reset_db import async_reset_database
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -47,7 +37,7 @@ async def on_startup():
     """
     if os.getenv("RESET_DB_ON_STARTUP", "").lower() == "true":
         # Асинхронный вызов
-        await async_reset_database()
+        await async_drop_database()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
