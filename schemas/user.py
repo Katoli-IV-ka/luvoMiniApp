@@ -6,17 +6,10 @@ from pydantic import BaseModel, Field
 from schemas.profile import ProfileRead
 
 
-# -------------------------------
-# 1) Общая базовая схема (UserBase)
-# -------------------------------
 class UserBase(BaseModel):
     telegram_user_id: int = Field(..., description="ID пользователя из Telegram")
 
 
-# -------------------------------
-# 2) Схема для создания (без is_premium и created_at)
-#    (используется при первом логине: telegram_user_id приходит из WebApp)
-# -------------------------------
 class UserCreate(UserBase):
     pass
     # Поскольку при создании записи мы уже получаем `telegram_user_id`
@@ -24,9 +17,6 @@ class UserCreate(UserBase):
     # is_premium по умолчанию = False, premium_expires_at (None).
 
 
-# -------------------------------
-# 3) Схема для чтения (ч/з API) — UserRead
-# -------------------------------
 class UserRead(UserBase):
     id: int = Field(..., description="PK в базе данных")
     is_premium: bool = Field(..., description="Признак премиума")
@@ -41,9 +31,6 @@ class UserRead(UserBase):
         # Чтобы Pydantic понимал, что передаётся SQLAlchemy-модель.
 
 
-# -------------------------------
-# 4) Схема для обновления (UserUpdate)
-# -------------------------------
 class UserUpdate(BaseModel):
     # Позволяет клиенту обновить (например) статус премиума вручную (если нужна админка)
     is_premium: Optional[bool] = Field(None, description="Признак премиума")

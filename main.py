@@ -10,7 +10,6 @@ from utils.drop_db import async_drop_database
 
 from routers.auth import router as auth_router
 from routers.profile import router as profile_router
-from routers.feed import router as feed_router
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -28,7 +27,6 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(profile_router)
-app.include_router(feed_router)
 
 @app.on_event("startup")
 async def on_startup():
@@ -45,8 +43,4 @@ async def on_startup():
 
 @app.get("/")
 async def root():
-    return {"message": "Luvo MiniApp Backend запущен. Версия 0.1.0"}
-
-@app.get("/ping")
-async def ping():
-    return {"pong": True}
+    return {"message": "Luvo MiniApp Backend"}
