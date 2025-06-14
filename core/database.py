@@ -6,7 +6,7 @@ from .config import settings
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=True,          # Чтобы в консоль выводились все SQL-запросы (для отладки, можно later выключить)
+    echo=False,          # Чтобы в консоль выводились все SQL-запросы (для отладки, можно later выключить)
     future=True         # Режим SQLAlchemy 2.0
 )
 
