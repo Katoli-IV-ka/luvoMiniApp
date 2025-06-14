@@ -37,7 +37,7 @@ class ProfileRead(ProfileBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # -------------------------------
@@ -54,4 +54,4 @@ class ProfileUpdate(BaseModel):
     longitude: Optional[float] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True #orm_mode

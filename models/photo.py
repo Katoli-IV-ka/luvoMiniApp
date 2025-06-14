@@ -11,7 +11,7 @@ class Photo(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     profile_id = Column(Integer, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
-    s3_key = Column(String(length=255), nullable=False)   # Ключ в бакете, например "profiles/123/photo1.jpg"
+    s3_key = Column(String(length=255), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

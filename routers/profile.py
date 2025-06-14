@@ -129,51 +129,6 @@ async def read_my_profile(
     )
 
 
-
-@router.get(
-    "/me",
-    response_model=ProfileRead,
-    summary="Получить свой профиль"
-)
-async def read_my_profile(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # 1) Получаем профиль
-    prof_stmt = select(Profile).where(Profile.user_id == current_user.id)
-    profile = (await db.execute(prof_stmt)).scalar_one_or_none()
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-
-    # 2) Явно запросим активные фото
-    photos_stmt = select(Photo).where(
-        and_(
-            Photo.profile_id == profile.id,
-            Photo.is_active.is_(True)
-        )
-    )
-    active_photos = (await db.execute(photos_stmt)).scalars().all()
-
-    # 3) Собираем URL-ы
-    base = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
-    bucket = settings.AWS_S3_BUCKET_NAME
-    photo_urls = [f"{base}/{bucket}/{p.s3_key}" for p in active_photos]
-
-    return ProfileRead(
-        id=profile.id,
-        user_id=profile.user_id,
-        first_name=profile.first_name,
-        birthdate=profile.birthdate,
-        gender=profile.gender,
-        about=profile.about,
-        telegram_username=profile.telegram_username,
-        instagram_username=profile.instagram_username,
-        photos=photo_urls,
-        created_at=profile.created_at,
-    )
-
-
-
 @router.post(
     "/photos",
     response_model=List[str],
