@@ -3,9 +3,10 @@ from typing import Optional
 from pydantic import BaseModel
 from .profile import ProfileRead
 
+
 class LikeResponse(BaseModel):
     matched: bool
     match_profile: Optional[ProfileRead] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
