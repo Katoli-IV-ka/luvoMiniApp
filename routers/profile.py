@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from core.database import get_db
 from core.config import settings
-from routers.auth import get_current_user
+from core.security import get_current_user
 from models.user import User
 from models.profile import Profile
 from models.photo import Photo
@@ -19,10 +19,10 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 
 @router.post(
-    "/",
+    "/create",
     response_model=ProfileRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Onboarding: создать профиль и загрузить главное фото"
+    summary="Cоздать профиль и загрузить главное фото"
 )
 async def create_profile(
     first_name: str = Form(...),
@@ -129,56 +129,3 @@ async def read_my_profile(
     )
 
 
-@router.post(
-    "/photos",
-    response_model=List[str],
-    summary="Загрузить доп. фото (до 6 штук)"
-)
-async def upload_photo(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    profile = current_user.profile
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-
-    active_photos = [p for p in profile.photos if p.is_active]
-    if len(active_photos) >= 6:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Max 6 photos allowed")
-
-    try:
-        s3_key = upload_file_to_s3(file.file, file.filename, settings.AWS_S3_BUCKET_NAME)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {e}")
-
-    photo = Photo(profile_id=profile.id, s3_key=s3_key, is_active=True)
-    db.add(photo)
-    await db.commit()
-    await db.refresh(photo)
-
-    base_url = settings.AWS_S3_ENDPOINT_URL.rstrip("/")
-    bucket = settings.AWS_S3_BUCKET_NAME
-    return [f"{base_url}/{bucket}/{p.s3_key}" for p in profile.photos if p.is_active]
-
-
-@router.delete(
-    "/photos/{photo_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Удалить фото профиля"
-)
-async def delete_photo(
-    photo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(Photo).where(Photo.id == photo_id, Photo.profile_id == current_user.profile.id)
-    )
-    photo = result.scalar_one_or_none()
-    if not photo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
-
-    photo.is_active = False
-    db.add(photo)
-    await db.commit()

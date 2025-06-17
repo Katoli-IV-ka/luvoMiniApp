@@ -4,11 +4,15 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.config import settings
 from core.database import engine
 from models.base import Base
 from utils.drop_db import async_drop_database
 
-
+from routers.auth import router as auth_router
+from routers.profile import router as profile_router
+from routers.feed import router as feed_router
+from routers.like import router as like_router
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -24,23 +28,15 @@ app.add_middleware(
     allow_headers=["*"],        # Content-Type, Authorization и др.
 )
 
-from routers.auth import router as auth_router
-from routers.profile import router as profile_router
-from routers.feed import router as feed_router
-from routers.like import router as like_router
-
 app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(feed_router)
 app.include_router(like_router)
 
+
 @app.on_event("startup")
 async def on_startup():
-    """
-    При старте приложения создаём все таблицы (если их нет) на основе Base.metadata.
-    """
-    if os.getenv("RESET_DB_ON_STARTUP", "").lower() == "true":
-        # Асинхронный вызов
+    if settings.RESET_DB_ON_STARTUP == "true":
         await async_drop_database()
 
     async with engine.begin() as conn:

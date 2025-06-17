@@ -8,4 +8,4 @@ class LikeResponse(BaseModel):
     match_profile: Optional[ProfileRead] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

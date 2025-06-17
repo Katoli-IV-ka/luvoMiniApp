@@ -9,68 +9,15 @@ from core.database import get_db
 from models.user import User
 from models.profile import Profile
 from models.feed_view import FeedView
-from routers.auth import get_current_user
+from core.security import get_current_user
 from schemas.profile import ProfileRead
 from utils.s3 import build_photo_urls
 
 router = APIRouter(prefix="/feed", tags=["Feed"])
 
 
-@router.get("/", response_model=ProfileRead)
-async def get_next_profile(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # 1) Получаем свой профиль
-    res = await db.execute(select(Profile).where(Profile.user_id == current_user.id))
-    my_profile = res.scalar_one_or_none()
-    if not my_profile:
-        raise HTTPException(status_code=404, detail="Your profile not found")
-
-    # 2) Собираем viewed_ids
-    res = await db.execute(
-        select(FeedView.viewed_id).where(FeedView.viewer_id == current_user.id)
-    )
-    viewed_ids = [r[0] for r in res.all()]
-
-    # 3) Ищем следующего кандидата
-    stmt = (
-        select(Profile)
-        .where(
-            Profile.user_id != current_user.id,
-            Profile.gender != my_profile.gender,
-            Profile.id.not_in(viewed_ids)
-        )
-        .limit(1)
-    )
-    res = await db.execute(stmt)
-    candidate = res.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="No more profiles found")
-
-    # 4) Сохраняем просмотр
-    db.add(FeedView(viewer_id=current_user.id, viewed_id=candidate.user_id))
-    await db.commit()
-
-    # 5) Формируем URL фото и собираем Pydantic-модель
-    urls = await build_photo_urls(candidate.id, db)
-
-    return ProfileRead(
-        id=candidate.id,
-        user_id=candidate.user_id,
-        first_name=candidate.first_name,
-        birthdate=candidate.birthdate,
-        gender=candidate.gender,
-        about=candidate.about,
-        telegram_username=candidate.telegram_username,
-        instagram_username=candidate.instagram_username,
-        photos=urls,
-        created_at=candidate.created_at,
-    )
-
-
 @router.get(
-    "/batch",
+    "/",
     response_model=List[ProfileRead],
     summary="Получить пачку профилей для ленты",
 )

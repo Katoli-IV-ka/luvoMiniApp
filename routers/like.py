@@ -10,15 +10,15 @@ from models.user    import User
 from models.profile import Profile
 from models.like    import Like as LikeModel
 from models.match   import Match as MatchModel
-from routers.auth import get_current_user
+from core.security import get_current_user
 from schemas.like   import LikeResponse
 from schemas.profile import ProfileRead
 from utils.s3       import build_photo_urls
 
-router = APIRouter(tags=["Likes"])
+router = APIRouter(prefix="/like", tags=["like"])
 
 @router.post(
-    "/profiles/{profile_id}/like",
+    "/{profile_id}",
     response_model=LikeResponse,
     status_code=status.HTTP_200_OK,
     summary="Поставить лайк и узнать, образовался ли матч",

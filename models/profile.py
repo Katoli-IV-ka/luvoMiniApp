@@ -10,8 +10,7 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.telegram_user_id", ondelete="CASCADE"), unique=True, nullable=False)
-    #column = "users.telegram_user_id"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     first_name = Column(String(100), nullable=False)
     instagram_username = Column(String(64), nullable=True)
     telegram_username = Column(String(64), nullable=True)
@@ -21,7 +20,6 @@ class Profile(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    #last_login - последняя активность, что не рекомендовать в ленту пользователй которые давно не пользуются сервисом
 
     # Изменено: используем back_populates вместо backref
     user = relationship("User", back_populates="profile", uselist=False)
