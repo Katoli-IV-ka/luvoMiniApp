@@ -9,7 +9,7 @@ from core.database import get_db
 from models.user import User
 from models.profile import Profile
 from models.feed_view import FeedView
-from routers.auth import get_current_user
+from core.auth import get_current_user
 from schemas.profile import ProfileRead
 from utils.s3 import build_photo_urls
 
@@ -22,7 +22,7 @@ async def get_next_profile(
     current_user: User = Depends(get_current_user),
 ):
     # 1) Получаем свой профиль
-    res = await db.execute(select(Profile).where(Profile.user_id == current_user.id))
+    res = await db.execute(select(Profile).where(Profile.telegram_user_id == current_user.id))
     my_profile = res.scalar_one_or_none()
     if not my_profile:
         raise HTTPException(status_code=404, detail="Your profile not found")
@@ -37,7 +37,7 @@ async def get_next_profile(
     stmt = (
         select(Profile)
         .where(
-            Profile.user_id != current_user.id,
+            Profile.telegram_user_id != current_user.id,
             Profile.gender != my_profile.gender,
             Profile.id.not_in(viewed_ids)
         )
@@ -49,7 +49,7 @@ async def get_next_profile(
         raise HTTPException(status_code=404, detail="No more profiles found")
 
     # 4) Сохраняем просмотр
-    db.add(FeedView(viewer_id=current_user.id, viewed_id=candidate.user_id))
+    db.add(FeedView(viewer_id=current_user.id, viewed_id=candidate.telegram_user_id))
     await db.commit()
 
     # 5) Формируем URL фото и собираем Pydantic-модель
@@ -57,7 +57,7 @@ async def get_next_profile(
 
     return ProfileRead(
         id=candidate.id,
-        user_id=candidate.user_id,
+        user_id=candidate.telegram_user_id,
         first_name=candidate.first_name,
         birthdate=candidate.birthdate,
         gender=candidate.gender,
@@ -82,7 +82,7 @@ async def get_feed_batch(
 ) -> List[ProfileRead]:
     # 1) Получаем свой профиль
     res = await db.execute(
-        select(Profile).where(Profile.user_id == current_user.id)
+        select(Profile).where(Profile.telegram_user_id == current_user.id)
     )
     my_profile = res.scalar_one_or_none()
     if not my_profile:
@@ -98,7 +98,7 @@ async def get_feed_batch(
     stmt = (
         select(Profile)
         .where(
-            Profile.user_id != current_user.id,
+            Profile.telegram_user_id != current_user.id,
             Profile.gender != my_profile.gender,
             Profile.id.not_in(viewed_ids),
         )
@@ -114,16 +114,16 @@ async def get_feed_batch(
 
     # 4) Сохраняем просмотры для всех возвращённых профилей
     for cand in candidates:
-        db.add(FeedView(viewer_id=current_user.id, viewed_id=cand.user_id))
+        db.add(FeedView(viewer_id=current_user.id, viewed_id=cand.telegram_user_id))
     await db.commit()
 
     # 5) Формируем список Pydantic-моделей с фото
     batch: List[ProfileRead] = []
     for cand in candidates:
-        urls = await build_photo_urls(cand.user_id, db)
+        urls = await build_photo_urls(cand.telegram_user_id, db)
         pr = ProfileRead(
             id=cand.id,
-            user_id=cand.user_id,
+            user_id=cand.telegram_user_id,
             first_name=cand.first_name,
             birthdate=cand.birthdate,
             gender=cand.gender,

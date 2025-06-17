@@ -3,6 +3,7 @@ import json
 
 from fastapi import APIRouter
 
+from core.auth import get_current_user
 from schemas.auth import TokenResponse, InitDataSchema
 from schemas.user import UserRead, UserCreate
 from models.profile import Profile
@@ -14,18 +15,15 @@ from core.config import settings
 from core.database import get_db
 from models.user import User
 
+from fastapi import Depends, HTTPException, status
+from jose import jwt
+
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
-
-# OAuth2 схема, будет читать Bearer-токен из заголовка Authorization
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-
-@router.post("/login",response_model=TokenResponse,summary="Login через Telegram WebApp initData → выдаёт JWT")
+@router.post("/login",
+             response_model=TokenResponse,
+             summary="Login через Telegram WebApp initData → выдаёт JWT")
 async def login(
     init_data: InitDataSchema,
     db: AsyncSession = Depends(get_db),
@@ -40,7 +38,6 @@ async def login(
     if not tg_id:
         raise HTTPException(status_code=400, detail="Invalid 'user' data in init_data")
 
-    # 2) ищем или создаём User
     stmt = select(User).where(User.telegram_user_id == tg_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -51,11 +48,11 @@ async def login(
         await db.refresh(user)
 
     # 3) генерируем JWT
-    token_payload = {"user_id": user.id}
+    token_payload = {"user_id": user.telegram_user_id}
     access_token = jwt.encode(token_payload, settings.TELEGRAM_BOT_TOKEN, algorithm="HS256")
 
     # 4) проверяем, есть ли профиль
-    stmt_profile = select(Profile.id).where(Profile.user_id == user.id).limit(1)
+    stmt_profile = select(Profile.id).where(Profile.telegram_user_id == user.telegram_user_id).limit(1)
     result_profile = await db.execute(stmt_profile)
     has_profile = result_profile.scalar_one_or_none() is not None
 
@@ -67,31 +64,7 @@ async def login(
     )
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, settings.TELEGRAM_BOT_TOKEN, algorithms=["HS256"])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    stmt = select(User).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
-
-
+#Возможно нужно удалить
 @router.get(
     "/me",
     response_model=TokenResponse,
@@ -102,7 +75,7 @@ async def whoami(
     db: AsyncSession = Depends(get_db),
 ):
     # Явная проверка наличия профиля через отдельный запрос
-    stmt = select(Profile).where(Profile.user_id == current_user.id)
+    stmt = select(Profile).where(Profile.telegram_user_id == current_user.id)
     result = await db.execute(stmt)
     has_profile = result.scalar_one_or_none() is not None
 
@@ -113,6 +86,7 @@ async def whoami(
     )
 
 
+#Возможно нужно удалить
 @router.post("/register", response_model=UserRead)
 async def register_user(
     user_in: UserCreate,

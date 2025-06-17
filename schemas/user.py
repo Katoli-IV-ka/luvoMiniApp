@@ -27,7 +27,7 @@ class UserRead(UserBase):
     profile: Optional[ProfileRead] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         # Чтобы Pydantic понимал, что передаётся SQLAlchemy-модель.
 
 
@@ -39,4 +39,4 @@ class UserUpdate(BaseModel):
     )
 
     class Config:
-        orm_mode = True
+        from_attributes = True

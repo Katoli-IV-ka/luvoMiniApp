@@ -10,8 +10,7 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.telegram_user_id", ondelete="CASCADE"), unique=True, nullable=False)
-    #column = "users.telegram_user_id"
+    telegram_user_id = Column(Integer, ForeignKey("users.telegram_user_id", ondelete="CASCADE"), unique=True, nullable=False)
     first_name = Column(String(100), nullable=False)
     instagram_username = Column(String(64), nullable=True)
     telegram_username = Column(String(64), nullable=True)
@@ -27,4 +26,4 @@ class Profile(Base):
     user = relationship("User", back_populates="profile", uselist=False)
 
     def __repr__(self):
-        return f"<Profile user_id={self.user_id} instagram={self.instagram_username}>"
+        return f"<Profile user_id={self.telegram_user_id} instagram={self.instagram_username}>"

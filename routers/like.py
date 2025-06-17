@@ -10,7 +10,7 @@ from models.user    import User
 from models.profile import Profile
 from models.like    import Like as LikeModel
 from models.match   import Match as MatchModel
-from routers.auth import get_current_user
+from core.auth import get_current_user
 from schemas.like   import LikeResponse
 from schemas.profile import ProfileRead
 from utils.s3       import build_photo_urls
@@ -33,7 +33,7 @@ async def like_profile(
         raise HTTPException(status_code=400, detail="You cannot like yourself")
 
     # 2) Проверяем, что профиль существует
-    res = await db.execute(select(Profile).where(Profile.user_id == profile_id))
+    res = await db.execute(select(Profile).where(Profile.telegram_user_id == profile_id))
     target_profile = res.scalar_one_or_none()
     if not target_profile:
         raise HTTPException(status_code=404, detail="Profile not found")
