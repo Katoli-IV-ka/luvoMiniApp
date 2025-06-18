@@ -33,7 +33,6 @@ app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(feed_router)
 app.include_router(like_router)
-app.include_router(instagram_router)
 
 
 @app.on_event("startup")
