@@ -1,5 +1,3 @@
-# backend/routers/profile.py
-
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, update
@@ -16,6 +14,7 @@ from models.profile import Profile
 from models.photo import Photo
 from schemas.profile import ProfileRead
 from utils.s3 import upload_file_to_s3, build_photo_urls
+
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -38,14 +37,14 @@ async def create_profile(
     db: AsyncSession = Depends(get_db),
 ):
     # Явно проверяем, есть ли профиль в БД
-    stmt = select(Profile).where(Profile.user_id == current_user.id)
+    stmt = select(Profile).where(Profile.telegram_user_id == current_user.id)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=400, detail="Profile already exists")
 
     profile = Profile(
-        user_id=current_user.id,
+        telegram_user_id=current_user.telegram_user_id,
         first_name=first_name,
         birthdate=birthdate,
         gender=gender,
@@ -77,7 +76,7 @@ async def create_profile(
 
     return ProfileRead(
         id=profile.id,
-        user_id=profile.user_id,
+        user_id=profile.telegram_user_id,
         first_name=profile.first_name,
         birthdate=profile.birthdate,
         gender=profile.gender,
@@ -98,7 +97,7 @@ async def read_my_profile(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
 ):
-    prof_stmt = select(Profile).where(Profile.user_id == current_user.id)
+    prof_stmt = select(Profile).where(Profile.telegram_user_id == current_user.id)
     profile = (await db.execute(prof_stmt)).scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
@@ -129,6 +128,7 @@ async def read_my_profile(
         photos=photo_urls,
         created_at=profile.created_at,
     )
+
 
 
 @router.put(
@@ -164,6 +164,7 @@ async def update_my_profile(
 
     await db.commit()
     await db.refresh(profile)
+
 
     # 3) Обработка фото (если пришли новые)
     if photos is not None:
@@ -212,3 +213,4 @@ async def update_my_profile(
         photos=urls,
         created_at=profile.created_at,
     )
+

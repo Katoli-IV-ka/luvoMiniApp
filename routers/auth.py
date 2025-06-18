@@ -3,6 +3,7 @@ import json
 
 from fastapi import APIRouter
 
+from core.auth import get_current_user
 from schemas.auth import TokenResponse, InitDataSchema
 from models.profile import Profile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     response_model=TokenResponse,
     summary="Авторизация через Telegram WebApp initData → выдаёт JWT"
 )
+
 async def login(
     init_data: InitDataSchema,
     db: AsyncSession = Depends(get_db),
@@ -37,7 +39,6 @@ async def login(
     if not tg_id:
         raise HTTPException(status_code=400, detail="Invalid 'user' data in init_data")
 
-    # 2) ищем или создаём User
     stmt = select(User).where(User.telegram_user_id == tg_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -48,11 +49,11 @@ async def login(
         await db.refresh(user)
 
     # 3) генерируем JWT
-    token_payload = {"user_id": user.id}
+    token_payload = {"user_id": user.telegram_user_id}
     access_token = jwt.encode(token_payload, settings.TELEGRAM_BOT_TOKEN, algorithm="HS256")
 
     # 4) проверяем, есть ли профиль
-    stmt_profile = select(Profile.id).where(Profile.user_id == user.id).limit(1)
+    stmt_profile = select(Profile.id).where(Profile.telegram_user_id == user.telegram_user_id).limit(1)
     result_profile = await db.execute(stmt_profile)
     has_profile = result_profile.scalar_one_or_none() is not None
 
@@ -62,5 +63,3 @@ async def login(
         token_type="bearer",
         has_profile=has_profile,
     )
-
-

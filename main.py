@@ -14,6 +14,7 @@ from routers.profile import router as profile_router
 from routers.feed import router as feed_router
 from routers.like import router as like_router
 
+
 app = FastAPI(
     title="Luvo MiniApp Backend",
     version="0.1.0",
@@ -22,16 +23,17 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # Или список ваших фронтенд-адресов
-    allow_credentials=True,     # Если используете куки или авторизацию
-    allow_methods=["*"],        # GET, POST, PATCH и т.д.
-    allow_headers=["*"],        # Content-Type, Authorization и др.
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(feed_router)
 app.include_router(like_router)
+app.include_router(instagram_router)
 
 
 @app.on_event("startup")

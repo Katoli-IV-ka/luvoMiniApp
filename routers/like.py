@@ -13,6 +13,7 @@ from models.like import Like as LikeModel
 from models.match import Match as MatchModel
 from models.feed_view import FeedView
 from schemas.like import LikeResponse
+
 from schemas.profile import ProfileRead
 from utils.s3 import build_photo_urls
 
@@ -33,8 +34,11 @@ async def like_profile(
     if profile_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot like yourself")
 
+
     # 1) Находим профиль и получаем user_id
     res = await db.execute(select(Profile).where(Profile.id == profile_id))
+
+
     target_profile = res.scalar_one_or_none()
     if not target_profile:
         raise HTTPException(status_code=404, detail="Profile not found")
