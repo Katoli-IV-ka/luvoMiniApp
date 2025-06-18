@@ -13,6 +13,7 @@ from routers.auth import router as auth_router
 from routers.profile import router as profile_router
 from routers.feed import router as feed_router
 from routers.like import router as like_router
+from utils.seed_db import seed
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -38,6 +39,9 @@ app.include_router(like_router)
 async def on_startup():
     if settings.RESET_DB_ON_STARTUP == "true":
         await async_drop_database()
+
+    if settings.SEED_DB == "true":
+        await seed()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
