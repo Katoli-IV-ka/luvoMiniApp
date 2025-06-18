@@ -13,7 +13,7 @@ from routers.auth import router as auth_router
 from routers.profile import router as profile_router
 from routers.feed import router as feed_router
 from routers.like import router as like_router
-from routers.instagram import router as instagram_router
+
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -35,11 +35,9 @@ app.include_router(feed_router)
 app.include_router(like_router)
 app.include_router(instagram_router)
 
+
 @app.on_event("startup")
 async def on_startup():
-    """
-    При старте приложения создаём все таблицы (если их нет) на основе Base.metadata.
-    """
     if settings.RESET_DB_ON_STARTUP == "true":
         await async_drop_database()
 

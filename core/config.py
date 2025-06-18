@@ -2,7 +2,6 @@ from pydantic.v1 import BaseSettings
 
 
 class Settings(BaseSettings):
-    DB_NAME: str
     DATABASE_URL: str
     TELEGRAM_BOT_TOKEN: str
     AWS_ACCESS_KEY_ID: str

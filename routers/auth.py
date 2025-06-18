@@ -5,7 +5,6 @@ from fastapi import APIRouter
 
 from core.auth import get_current_user
 from schemas.auth import TokenResponse, InitDataSchema
-from schemas.user import UserRead, UserCreate
 from models.profile import Profile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -15,15 +14,17 @@ from core.config import settings
 from core.database import get_db
 from models.user import User
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 from jose import jwt
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/login",
-             response_model=TokenResponse,
-             summary="Login через Telegram WebApp initData → выдаёт JWT")
+@router.post(
+    "/",
+    response_model=TokenResponse,
+    summary="Авторизация через Telegram WebApp initData → выдаёт JWT"
+)
+
 async def login(
     init_data: InitDataSchema,
     db: AsyncSession = Depends(get_db),
@@ -62,48 +63,3 @@ async def login(
         token_type="bearer",
         has_profile=has_profile,
     )
-
-
-#Возможно нужно удалить
-@router.get(
-    "/me",
-    response_model=TokenResponse,
-    summary="Проверить JWT и узнать, существует ли профиль"
-)
-async def whoami(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    # Явная проверка наличия профиля через отдельный запрос
-    stmt = select(Profile).where(Profile.telegram_user_id == current_user.id)
-    result = await db.execute(stmt)
-    has_profile = result.scalar_one_or_none() is not None
-
-    return TokenResponse(
-        access_token="",           # или можно не возвращать access_token здесь вовсе
-        token_type="bearer",
-        has_profile=has_profile,
-    )
-
-
-#Возможно нужно удалить
-@router.post("/register", response_model=UserRead)
-async def register_user(
-    user_in: UserCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    # 1) Проверяем, существует ли уже пользователь с таким telegram_user_id
-    stmt = select(User).where(User.telegram_user_id == user_in.telegram_user_id)
-    existing_user = (await db.execute(stmt)).scalar_one_or_none()
-    if existing_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already registered")
-
-    # 2) Создаём пользователя
-    new_user = User(
-        telegram_user_id=user_in.telegram_user_id,
-    )
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-
-    return new_user

@@ -12,7 +12,6 @@ async def async_drop_database():
         echo=False,
         isolation_level="AUTOCOMMIT"
     )
-
     async with engine.connect() as conn:
         await conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
@@ -23,5 +22,3 @@ async def async_drop_database():
 
     await engine.dispose()
     print("⚠️ Схема public очищена и все таблицы созданы заново.")
-
-

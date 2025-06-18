@@ -8,11 +8,11 @@ from starlette.concurrency import run_in_threadpool
 
 from core.database import get_db
 from core.config import settings
-from routers.auth import get_current_user
+from core.security import get_current_user
 from models.user import User
 from models.profile import Profile
 from models.photo import Photo
-from schemas.profile import ProfileRead, ProfileCreate, ProfileUpdate
+from schemas.profile import ProfileRead
 from utils.s3 import upload_file_to_s3, build_photo_urls
 
 
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 
 @router.post(
-    "/",
+    "/create",
     response_model=ProfileRead,
     status_code=status.HTTP_201_CREATED,
     summary="Cоздать профиль и загрузить главное фото"
@@ -130,39 +130,6 @@ async def read_my_profile(
     )
 
 
-@router.get(
-    "/{user_id}",
-    response_model=ProfileRead,
-    summary="Получить детальный профиль пользователя по ID",
-)
-async def read_profile(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> ProfileRead:
-
-    res = await db.execute(select(Profile).where(Profile.telegram_user_id == user_id))
-    profile = res.scalar_one_or_none()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    # 3) Собираем URL-ы фото
-    urls = await build_photo_urls(user_id, db)
-
-    # 4) Формируем Pydantic-модель
-    return ProfileRead(
-        id=profile.id,
-        user_id=profile.user_id,
-        first_name=profile.first_name,
-        birthdate=profile.birthdate,
-        gender=profile.gender,
-        about=profile.about,
-        telegram_username=profile.telegram_username,
-        instagram_username=profile.instagram_username,
-        photos=urls,
-        created_at=profile.created_at,
-    )
-
 
 @router.put(
     "/me/update",
@@ -180,8 +147,7 @@ async def update_my_profile(
 ) -> ProfileRead:
 
     # 1) Загружаем профиль
-    print(f'p.id: {Profile.telegram_user_id}\nc_u.id: {current_user.id}')
-    res = await db.execute(select(Profile).where(Profile.telegram_user_id == current_user.id))
+    res = await db.execute(select(Profile).where(Profile.user_id == current_user.id))
     profile = res.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -198,6 +164,7 @@ async def update_my_profile(
 
     await db.commit()
     await db.refresh(profile)
+
 
     # 3) Обработка фото (если пришли новые)
     if photos is not None:
