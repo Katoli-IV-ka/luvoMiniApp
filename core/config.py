@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     AWS_S3_ENDPOINT_URL: str
     AWS_S3_REGION: str
     SEED_DB: str
-
+    PROXY: str
+    RAPIDAPI_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60*5
 
     class Config:
         env_file = ".env"

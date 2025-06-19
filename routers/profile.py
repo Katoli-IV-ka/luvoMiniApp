@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, update, delete
 from datetime import date
 from typing import List, Optional
 
@@ -15,6 +15,7 @@ from models.user import User
 from models.profile import Profile
 from models.photo import Photo
 from schemas.profile import ProfileRead
+from services.instagram_service import sync_instagram_subscriptions
 from utils.s3 import upload_file_to_s3, build_photo_urls
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -101,7 +102,7 @@ async def read_my_profile(
     prof_stmt = select(Profile).where(Profile.user_id == current_user.id)
     profile = (await db.execute(prof_stmt)).scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Profile not found")
 
     # 2) Явно запросим активные фото
     photos_stmt = select(Photo).where(
@@ -159,8 +160,17 @@ async def update_my_profile(
         profile.birthdate = birthdate
     if about is not None:
         profile.about = about
+
     if instagram_username is not None:
         profile.instagram_username = instagram_username
+        await db.commit()
+        await db.refresh(profile)
+        # Этот вызов заполнит instagram_data и instagram_connections
+        await sync_instagram_subscriptions(
+            telegram_user_id=current_user.telegram_user_id,
+            instagram_username=instagram_username,
+            db=db
+        )
 
     await db.commit()
     await db.refresh(profile)

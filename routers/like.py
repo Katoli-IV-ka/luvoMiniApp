@@ -37,7 +37,7 @@ async def like_profile(
     res = await db.execute(select(Profile).where(Profile.id == profile_id))
     target_profile = res.scalar_one_or_none()
     if not target_profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=401, detail="Profile not found")
     target_user_id = target_profile.user_id
 
     # 2) Сохраняем лайк, если его ещё нет
@@ -104,7 +104,7 @@ async def ignore_like(
     res = await db.execute(select(Profile).where(Profile.id == profile_id))
     profile = res.scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=401, detail="Profile not found")
     target_user_id = profile.user_id
 
     # 2) Проверяем, что этот пользователь ставил вам лайк

@@ -17,3 +17,4 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"]
     has_profile: bool
+    expires_in_ms: int

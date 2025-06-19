@@ -7,6 +7,7 @@ from schemas.auth import TokenResponse, InitDataSchema
 from models.profile import Profile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from datetime import datetime, timedelta
 
 from core.security import verify_init_data
 from core.config import settings
@@ -47,9 +48,22 @@ async def login(
         await db.commit()
         await db.refresh(user)
 
-    # 3) генерируем JWT
-    token_payload = {"user_id": user.id}
-    access_token = jwt.encode(token_payload, settings.TELEGRAM_BOT_TOKEN, algorithm="HS256")
+    # 3) Генерируем JWT с полем exp
+    now = datetime.utcnow()
+    expires = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+      # кладём в payload claim exp (в секундах)
+    token_payload = {
+        "user_id": user.id,
+        "exp": expires
+    }
+    access_token = jwt.encode(
+        token_payload,
+        settings.TELEGRAM_BOT_TOKEN,
+        algorithm = "HS256"
+    )
+    # миллисекунды с 1970-01-01 UTC
+    expires_ms = int(expires.timestamp() * 1000)
+
 
     # 4) проверяем, есть ли профиль
     stmt_profile = select(Profile.id).where(Profile.user_id == user.id).limit(1)
@@ -61,6 +75,7 @@ async def login(
         access_token=access_token,
         token_type="bearer",
         has_profile=has_profile,
+        expires_in_ms=expires_ms
     )
 
 
