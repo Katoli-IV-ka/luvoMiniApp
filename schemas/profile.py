@@ -55,3 +55,16 @@ class ProfileUpdate(BaseModel):
 
     class Config:
         from_attributes = True #orm_mode
+
+class TopProfileRead(BaseModel):
+    id: int
+    user_id: int
+    first_name: Optional[str]
+    birthdate: Optional[date]
+    gender: Optional[str]
+    about: Optional[str]
+    telegram_username: Optional[str]
+    instagram_username: Optional[str]
+    photos: List[str]
+    created_at: datetime
+    likes_count: int

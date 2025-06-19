@@ -13,7 +13,7 @@ from models.like import Like as LikeModel
 from models.match import Match as MatchModel
 from models.feed_view import FeedView
 from schemas.like import LikeResponse
-from schemas.profile import ProfileRead
+from schemas.profile import ProfileRead, TopProfileRead
 from utils.s3 import build_photo_urls
 
 router = APIRouter(prefix="", tags=["Likes"])
@@ -212,14 +212,13 @@ async def incoming_likes(
 
 @router.get(
     "/top",
-    response_model=List[ProfileRead],
+    response_model=List[TopProfileRead],
     summary="Топ-100 пользователей по числу полученных лайков",
 )
 async def top_profiles(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # чтобы только авторизованные могли смотреть
-) -> List[ProfileRead]:
-    # 1) Собираем top 100 user_id с наибольшим числом лайков
+    current_user: User = Depends(get_current_user),
+) -> List[TopProfileRead]:
     likes_count_subq = (
         select(
             LikeModel.liked_id.label("user_id"),
@@ -231,7 +230,6 @@ async def top_profiles(
         .subquery()
     )
 
-    # 2) Джоиним с профилями
     stmt = (
         select(
             Profile,
@@ -245,12 +243,11 @@ async def top_profiles(
     if not rows:
         return []
 
-    # 3) Формируем ответ
-    output: List[ProfileRead] = []
+    output: List[TopProfileRead] = []
     for profile, likes_count in rows:
         urls = await build_photo_urls(profile.user_id, db)
         output.append(
-            ProfileRead(
+            TopProfileRead(
                 id=profile.id,
                 user_id=profile.user_id,
                 first_name=profile.first_name,
@@ -261,6 +258,7 @@ async def top_profiles(
                 instagram_username=profile.instagram_username,
                 photos=urls,
                 created_at=profile.created_at,
+                likes_count=likes_count,
             )
         )
 
