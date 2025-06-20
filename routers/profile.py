@@ -222,3 +222,73 @@ async def update_my_profile(
         photos=urls,
         created_at=profile.created_at,
     )
+
+@router.post(
+    "/",
+    response_model=List[str],
+    summary="Загрузить новые фото (несколько за раз)",
+)
+async def upload_photos(
+    photos: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[str]:
+    # 1) Сколько уже есть?
+    res = await db.execute(
+        select(Photo).where(Photo.user_id == current_user.id)
+    )
+    existing = res.scalars().all()
+    if len(existing) + len(photos) > 6:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Нельзя иметь более {6} фото"
+        )
+
+    urls: List[str] = []
+    # 2) Загрузка каждого файла
+    for upload in photos:
+        try:
+            key = await run_in_threadpool(
+                upload_file_to_s3,
+                upload.file,
+                upload.filename,
+                settings.AWS_S3_BUCKET_NAME
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"S3 upload error: {e}")
+
+        new = Photo(user_id=current_user.id, s3_key=key, is_active=True)
+        db.add(new)
+        await db.commit()
+        await db.refresh(new)
+
+        # собираем URL
+        base = settings.AWS_S3_ENDPOINT_URL.rstrip("/") + "/" + settings.AWS_S3_BUCKET_NAME
+        urls.append(f"{base}/{key}")
+
+    return urls
+
+
+@router.delete(
+    "/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить фото по ID",
+)
+async def delete_photo(
+    photo_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1) Проверяем, что такое фото у пользователя есть
+    res = await db.execute(
+        select(Photo).where(Photo.id == photo_id, Photo.user_id == current_user.id)
+    )
+    photo = res.scalar_one_or_none()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    # 2) Удаляем из БД
+    await db.execute(delete(Photo).where(Photo.id == photo_id))
+    await db.commit()
+
+    return

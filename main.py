@@ -1,6 +1,4 @@
 # backend/main.py
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,6 +12,7 @@ from routers.profile import router as profile_router
 from routers.feed import router as feed_router
 from routers.like import router as like_router
 from routers.match import router as match_router
+from routers.photo import router as photo_router
 
 from utils.seed_db import seed
 
@@ -36,6 +35,8 @@ app.include_router(profile_router)
 app.include_router(feed_router)
 app.include_router(like_router)
 app.include_router(match_router)
+app.include_router(photo_router)
+
 
 @app.on_event("startup")
 async def on_startup():
