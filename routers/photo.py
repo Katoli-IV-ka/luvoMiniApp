@@ -86,14 +86,14 @@ async def upload_photo(
 
 @router.get(
     "/",
-    response_model=List[str],
-    summary="Получить список всех фото профиля",
+    response_model=List[PhotoRead],
+    summary="Получить список всех активных фото профиля",
 )
 async def list_photos(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    # 1) Находим профиль текущего пользователя
+    current_user=Depends(get_current_user),
+) -> List[PhotoRead]:
+    # 1) Находим профиль
     res = await db.execute(
         select(Profile.id).where(Profile.user_id == current_user.id)
     )
@@ -101,10 +101,30 @@ async def list_photos(
     if profile_id is None:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    # 2) Строим и возвращаем список URL всех активных фото
-    urls = await build_photo_urls(profile_id, db)
-    # АБСОЛЮТНО ВАЖНО: вернуть список, даже если он пуст
-    return urls
+    # 2) Достаём все активные Photo, отсортированные по created_at
+    res2 = await db.execute(
+        select(Photo)
+        .where(Photo.profile_id == profile_id, Photo.is_active.is_(True))
+        .order_by(Photo.created_at.asc())
+    )
+    photos = res2.scalars().all()
+
+    # 3) Формируем базовый URL
+    base = settings.AWS_S3_ENDPOINT_URL.rstrip("/") + "/" + settings.AWS_S3_BUCKET_NAME
+
+    # 4) Собираем и возвращаем список PhotoRead
+    result: List[PhotoRead] = []
+    for p in photos:
+        result.append(
+            PhotoRead(
+                id=p.id,
+                profile_id=p.profile_id,
+                url=f"{base}/{p.s3_key}",
+                is_active=p.is_active,
+                created_at=p.created_at,
+            )
+        )
+    return result
 
 
 @router.delete(

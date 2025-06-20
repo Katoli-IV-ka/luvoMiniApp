@@ -37,7 +37,7 @@ async def build_photo_urls(profile_id: int, db: AsyncSession) -> list[str]:
     # достаём только ключи из таблицы photos
     result = await db.execute(
         select(Photo.s3_key)
-        .where(Photo.profile_id == profile_id, Photo.is_active == True)
+        .where(Photo.profile_id == profile_id)
         .order_by(Photo.created_at.asc())
     )
     keys = [row[0] for row in result.all()]
