@@ -4,7 +4,7 @@ import boto3
 from botocore.exceptions import BotoCoreError
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from typing import List, Any
 
 from starlette.concurrency import run_in_threadpool
@@ -145,6 +145,18 @@ async def delete_photo(
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
+    # 1.5) Проверяем, что это не последнее фото в профиле
+    count_res = await db.execute(
+        select(func.count(Photo.id)).where(Photo.profile_id == photo.profile_id)
+    )
+    print(count_res)
+    total_photos = count_res.scalar_one()
+    if total_photos <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete the last photo in profile"
+        )
+
     # 2) Удаляем файл из S3 в отдельном потоке
     s3_client = boto3.client(
         "s3",
@@ -161,7 +173,7 @@ async def delete_photo(
         )
     except BotoCoreError as e:
         # Логируем ошибку, но продолжаем удаление из БД
-        # можно подключить ваш логгер: logger.error(f"S3 delete failed: {e}")
+        # logger.error(f"S3 delete failed: {e}")
         raise HTTPException(status_code=500, detail=f"S3 delete error: {e}")
 
     # 3) Удаляем запись из БД
