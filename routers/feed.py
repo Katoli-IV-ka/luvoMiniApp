@@ -2,7 +2,7 @@ from typing import List, Set
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from core.database import get_db
 from models.instagram_connection import InstagramConnection
@@ -29,6 +29,7 @@ async def get_feed_batch(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[ProfileRead]:
+    # 1) Свой профиль
     res = await db.execute(
         select(Profile).where(Profile.user_id == current_user.id)
     )
@@ -77,7 +78,7 @@ async def get_feed_batch(
         .where(
             Profile.user_id != current_user.id,
             Profile.user_id.not_in(viewed | lvl1 | lvl2),
-            Profile.gender == my_profile.gender  # или != в зависимости от вашей логики
+            Profile.gender != my_profile.gender
         )
     )
     others = [r[0] for r in res.all()]
@@ -85,8 +86,37 @@ async def get_feed_batch(
     # 6) Собираем единый упорядоченный список и применяем skip/limit
     ordered = list(lvl1) + list(lvl2) + others
     page = ordered[skip: skip + limit]
+
+    # 6.1) Если после всех уровней нет профилей — забираем случайных
     if not page:
-        return []
+        res = await db.execute(
+            select(Profile)
+            .where(
+                Profile.user_id != current_user.id,
+                Profile.gender != my_profile.gender,
+            )
+            .order_by(func.random())
+            .limit(limit)
+        )
+        random_profiles = res.scalars().all()
+        batch = []
+        for p in random_profiles:
+            urls = await build_photo_urls(p.user_id, db)
+            batch.append(
+                ProfileRead(
+                    id=p.id,
+                    user_id=p.user_id,
+                    first_name=p.first_name,
+                    birthdate=p.birthdate,
+                    gender=p.gender,
+                    about=p.about,
+                    telegram_username=p.telegram_username,
+                    instagram_username=p.instagram_username,
+                    photos=urls,
+                    created_at=p.created_at,
+                )
+            )
+        return batch
 
     # 7) Достаём Profile для этих user_id
     res = await db.execute(
