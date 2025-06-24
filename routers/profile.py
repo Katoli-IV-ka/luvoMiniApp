@@ -1,6 +1,7 @@
 # backend/routers/profile.py
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.params import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, update, delete
 from datetime import date
@@ -223,72 +224,45 @@ async def update_my_profile(
         created_at=profile.created_at,
     )
 
-@router.post(
-    "/",
-    response_model=List[str],
-    summary="Загрузить новые фото (несколько за раз)",
+
+@router.get(
+    "/{user_id}",
+    response_model=ProfileRead,
+    summary="Получить публичный профиль другого пользователя по user_id",
 )
-async def upload_photos(
-    photos: List[UploadFile] = File(...),
+async def read_user_profile(
+    user_id: int = Path(..., description="ID Telegram-пользователя"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    # 1) Сколько уже есть?
+) -> ProfileRead:
+    """
+    Возвращает публичную информацию о профиле пользователя,
+    указанного по user_id. Требуется только JWT авторизация.
+    """
+    # 1) Ищем профиль по user_id
     res = await db.execute(
-        select(Photo).where(Photo.user_id == current_user.id)
+        select(Profile).where(Profile.user_id == user_id)
     )
-    existing = res.scalars().all()
-    if len(existing) + len(photos) > 6:
+    profile: Optional[Profile] = res.scalar_one_or_none()
+    if not profile:
         raise HTTPException(
-            status_code=400,
-            detail=f"Нельзя иметь более {6} фото"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found"
         )
 
-    urls: List[str] = []
-    # 2) Загрузка каждого файла
-    for upload in photos:
-        try:
-            key = await run_in_threadpool(
-                upload_file_to_s3,
-                upload.file,
-                upload.filename,
-                settings.AWS_S3_BUCKET_NAME
-            )
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"S3 upload error: {e}")
+    # 2) Формируем URL фотографий
+    photos = await build_photo_urls(profile.user_id, db)
 
-        new = Photo(user_id=current_user.id, s3_key=key, is_active=True)
-        db.add(new)
-        await db.commit()
-        await db.refresh(new)
-
-        # собираем URL
-        base = settings.AWS_S3_ENDPOINT_URL.rstrip("/") + "/" + settings.AWS_S3_BUCKET_NAME
-        urls.append(f"{base}/{key}")
-
-    return urls
-
-
-@router.delete(
-    "/{photo_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Удалить фото по ID",
-)
-async def delete_photo(
-    photo_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # 1) Проверяем, что такое фото у пользователя есть
-    res = await db.execute(
-        select(Photo).where(Photo.id == photo_id, Photo.user_id == current_user.id)
+    # 3) Собираем и возвращаем Pydantic-модель
+    return ProfileRead(
+        id=profile.id,
+        user_id=profile.user_id,
+        first_name=profile.first_name,
+        birthdate=profile.birthdate,
+        gender=profile.gender,
+        about=profile.about,
+        telegram_username=profile.telegram_username,
+        instagram_username=profile.instagram_username,
+        photos=photos,
+        created_at=profile.created_at,
     )
-    photo = res.scalar_one_or_none()
-    if not photo:
-        raise HTTPException(status_code=404, detail="Photo not found")
-
-    # 2) Удаляем из БД
-    await db.execute(delete(Photo).where(Photo.id == photo_id))
-    await db.commit()
-
-    return
