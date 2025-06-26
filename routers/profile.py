@@ -231,7 +231,7 @@ async def update_my_profile(
     summary="Получить публичный профиль другого пользователя по user_id",
 )
 async def read_user_profile(
-    user_id: int = Path(..., description="ID Telegram-пользователя"),
+    user_id: int = Path(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProfileRead:
