@@ -9,26 +9,27 @@ from models.profile import Profile
 from models.photo import Photo
 
 # Список из 100+ S3-ключей, предоставленный вами
-S3_KEYS = [
-    "profiles/img_1_97ce2548ec41463f9a8ce2a228691128.png",
-    "profiles/img_10_8aa8233b090e4d89be4df6354a486aef.png",
-    "profiles/img_11_2da0926ccfcf41f4b66b9aca0785068f.png",
-    "profiles/img_12_f097692b11dc4e85b9a98b1f3bbe6a6e.png",
-    "profiles/img_13_7ec26eb38de949c884b3430bcb8387d2.png",
-    "profiles/img_14_69025c3de4b149308f883795880caaf2.png",
-    "profiles/img_15_2eb255e4722e4b71abae8a25063d062a.png",
-    "profiles/img_16_acc98ab42f5847e29125aff7d2d5d4b3.png",
-    "profiles/img_17_1e6c5fb7bb5847698fc08c301b3e4318.png",
-    "profiles/img_18_2f5107c60b554241abcdc2cc627af7bd.png",
-    "profiles/img_19_9cab0028f2c84ebfb8e1f99ddcca10f0.png",
-    "profiles/img_2_b547a112919f4b338b851a7aaadfaeec.png",
-    "profiles/img_3_85632630433647fe9f4a79393a7907a1.png",
-    "profiles/img_4_c9d729f7c777451384663fa5e2a2b9e1.png",
-    "profiles/img_5_5e49cc3f7cac456d97b15468fe4a8045.png",
-    "profiles/img_6_6deba5cc03144f49929099e561930d28.png",
-    "profiles/img_7_c341df862da74bfb85b42581601b6b15.png",
-    "profiles/img_8_bb807f60325d4157b16d712c02d34c9e.png",
-    "profiles/img_9_c73dd3311ee2457da26185d14a1aab9b.png",
+KEYS = [
+    "profiles/img_1_4e14f58aa10a4d86b53cd3c1e814ba7c.jpg",
+    "profiles/img_10_875b47e0d0ac4fc3908025e40b1aa388.jpg",
+    "profiles/img_11_808ef7cb0df74ea289df21699576dbc5.jpg",
+    "profiles/img_12_a756e645c6d24df6a3f66b6347de7df8.jpg",
+    "profiles/img_13_e0d4a492a8c444149daf27e27455d9ba.jpg",
+    "profiles/img_14_bad1363c96e04d65aabce3e3cb67b172.jpg",
+    "profiles/img_15_9810f6e5c1ca4585bf075f0b7c0e024d.jpg",
+    "profiles/img_16_35c98b74ea39456fb1ba7b710337e6bc.jpg",
+    "profiles/img_17_ae8553dd7fea4ed8abaeb3b172cd6eb7.jpg",
+    "profiles/img_18_15d069f425554f019f41687caeaacd00.jpg",
+    "profiles/img_19_aa1f3e9cd38448c39aa94c8c7b56d527.jpg",
+    "profiles/img_2_4e234ade1f984facaf8ec705d65b7a20.jpg",
+    "profiles/img_20_3f14bcb8fea54fca9b5a933f4ebb9759.jpg",
+    "profiles/img_3_c93f8835526a40efb97ebd975b51c57a.jpg",
+    "profiles/img_4_e5b75fe863344828a00dfa72434bb9ac.jpg",
+    "profiles/img_5_329181a6aff4474cae446a6c50245bd2.jpg",
+    "profiles/img_6_300559b4fc2a444fa167feb06b25a543.jpg",
+    "profiles/img_7_22aac45bae93495b91e14450c5a44d30.jpg",
+    "profiles/img_8_a145dea7fe39465a95b9ea5dbbdb95d4.jpg",
+    "profiles/img_9_488edbdae5b743f284ad394066fd129c.jpg",
 ]
 
 
