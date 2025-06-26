@@ -149,7 +149,7 @@ async def delete_photo(
     count_res = await db.execute(
         select(func.count(Photo.id)).where(Photo.profile_id == photo.profile_id)
     )
-    print(count_res)
+
     total_photos = count_res.scalar_one()
     if total_photos <= 1:
         raise HTTPException(
@@ -157,6 +157,7 @@ async def delete_photo(
             detail="Cannot delete the last photo in profile"
         )
 
+    """
     # 2) Удаляем файл из S3 в отдельном потоке
     s3_client = boto3.client(
         "s3",
@@ -165,6 +166,7 @@ async def delete_photo(
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
         region_name=settings.AWS_S3_REGION,
     )
+    
     try:
         await run_in_threadpool(
             s3_client.delete_object,
@@ -175,6 +177,7 @@ async def delete_photo(
         # Логируем ошибку, но продолжаем удаление из БД
         # logger.error(f"S3 delete failed: {e}")
         raise HTTPException(status_code=500, detail=f"S3 delete error: {e}")
+    """
 
     # 3) Удаляем запись из БД
     await db.execute(delete(Photo).where(Photo.id == photo_id))
