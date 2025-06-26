@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     SEED_DB: str
     PROXY: str
     RAPIDAPI_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60*5
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 86400
 
     class Config:
         env_file = ".env"
