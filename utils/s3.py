@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from models.photo import Photo
+from utils.image_tools import compress_image_bytes
 
 # ==== Настройка клиента MinIO ====
 _endpoint = settings.AWS_S3_ENDPOINT_URL.replace("https://", "").replace("http://", "")
@@ -21,33 +22,38 @@ _s3 = Minio(
 )
 
 
-def upload_file_to_s3(file, file_name: str, bucket_name: str) -> str:
+def upload_file_to_s3(
+    file_like,
+    file_name: str,
+    bucket_name: str
+) -> str:
     """
-    Загружает file-like объект (UploadFile.file) в указанный бакет MinIO/S3.
-    Возвращает сгенерированный ключ (s3_key).
-    Сигнатура совпадает с прежней: upload_file_to_s3(file, file_name, bucket_name)
+    Сжимает изображение через compress_image_bytes и кладёт в S3.
+    Бросает ValueError, если файл не изображение.
+    Бросает Exception, если проблемы с S3.
     """
+    # 1) читаем весь файл в байты
+    data = file_like.read()
+
+    # 2) сжимаем и получаем расширение
+    compressed_data, ext = compress_image_bytes(data, quality=90)
+
+    # 3) генерируем ключ с правильным расширением
+    s3_key = f"profiles/{file_name}_{uuid.uuid4().hex}.{ext}"
+
+    # 4) заливаем в S3/MinIO
     try:
-        # Генерируем уникальный ключ для файла
-        s3_key = f"profiles/{file_name}_{uuid.uuid4().hex}.jpg"
-
-        # Читаем всё содержимое и оборачиваем в поток
-        data = file.read()
-        stream = BytesIO(data)
-
-        # Загружаем в MinIO
         _s3.put_object(
             bucket_name,
             s3_key,
-            stream,
-            length=len(data),
-            content_type="application/octet-stream"
+            BytesIO(compressed_data),
+            length=len(compressed_data),
+            content_type=f"image/{ext}"
         )
-
-        return s3_key
-
     except S3Error as e:
         raise Exception(f"Ошибка при загрузке в S3: {e}")
+
+    return s3_key
 
 
 def delete_file_from_s3(s3_key: str, bucket_name: str) -> None:

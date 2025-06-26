@@ -57,8 +57,12 @@ async def upload_photo(
             f"{current_user.id}_{uuid.uuid4().hex}",
             settings.AWS_S3_BUCKET_NAME
         )
+    except ValueError as ve:
+        # неподдерживаемый формат / не изображение
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"S3 upload error: {e}")
+        # сбой при работе с S3
+        raise HTTPException(status_code=500, detail=str(e))
 
     # 4) Сохраняем запись в БД
     new_photo = Photo(

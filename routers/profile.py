@@ -62,8 +62,12 @@ async def create_profile(
     # Загружаем главное фото
     try:
         s3_key = upload_file_to_s3(file.file, file.filename, settings.AWS_S3_BUCKET_NAME)
+    except ValueError as ve:
+        # неподдерживаемый формат / не изображение
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+        # сбой при работе с S3
+        raise HTTPException(status_code=500, detail=str(e))
 
     photo = Photo(profile_id=profile.id, s3_key=s3_key, is_active=True)
     db.add(photo)
@@ -195,8 +199,12 @@ async def update_my_profile(
                     upload.filename,  # или f"{current_user.id}_{upload.filename}"
                     settings.AWS_S3_BUCKET_NAME
                 )
+            except ValueError as ve:
+                # неподдерживаемый формат / не изображение
+                raise HTTPException(status_code=400, detail=str(ve))
             except Exception as e:
-                raise HTTPException(status_code=500, detail=f"S3 upload error: {e}")
+                # сбой при работе с S3
+                raise HTTPException(status_code=500, detail=str(e))
 
             # Сохраняем в БД новый Photo
             new_photo = Photo(
