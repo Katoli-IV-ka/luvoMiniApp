@@ -17,6 +17,9 @@ RUN pip install --upgrade pip \
 # 3. Копируем код приложения
 COPY . .
 
+# 3.1. Диагностика: убедимся, что main.py там, где ожидаем
+RUN echo "Listing /app:" && ls -R /app
+
 # 4. Отключаем буферизацию вывода
 ENV PYTHONUNBUFFERED=1
 
