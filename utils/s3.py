@@ -1,40 +1,60 @@
-# backend/utils/s3.py
-import boto3
 import uuid
+from io import BytesIO
 
-from botocore.exceptions import NoCredentialsError
+from minio import Minio
+from minio.error import S3Error
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from models.photo import Photo
 
-
-# Настройки для подключения к S3
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-    endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-    region_name=settings.AWS_S3_REGION,
+# ==== Настройка клиента MinIO ====
+_endpoint = settings.AWS_S3_ENDPOINT_URL.replace("https://", "").replace("http://", "")
+_s3 = Minio(
+    _endpoint,
+    access_key=settings.AWS_ACCESS_KEY_ID,
+    secret_key=settings.AWS_SECRET_ACCESS_KEY,
+    region=settings.AWS_S3_REGION,
+    secure=False  # по договорённости без TLS
 )
 
-def upload_file_to_s3(file, file_name: str, bucket_name: str):
+
+def upload_file_to_s3(file, file_name: str, bucket_name: str) -> str:
     """
-    Загружает файл в указанный бакет S3.
+    Загружает file-like объект (UploadFile.file) в указанный бакет MinIO/S3.
+    Возвращает сгенерированный ключ (s3_key).
+    Сигнатура совпадает с прежней: upload_file_to_s3(file, file_name, bucket_name)
     """
     try:
         # Генерируем уникальный ключ для файла
         s3_key = f"profiles/{file_name}_{uuid.uuid4().hex}.jpg"
-        s3.upload_fileobj(file, bucket_name, s3_key)
+
+        # Читаем всё содержимое и оборачиваем в поток
+        data = file.read()
+        stream = BytesIO(data)
+
+        # Загружаем в MinIO
+        _s3.put_object(
+            bucket_name,
+            s3_key,
+            stream,
+            length=len(data),
+            content_type="application/octet-stream"
+        )
+
         return s3_key
-    except NoCredentialsError:
-        raise Exception("Credentials not available")
+
+    except S3Error as e:
+        raise Exception(f"Ошибка при загрузке в S3: {e}")
 
 
 async def build_photo_urls(profile_id: int, db: AsyncSession) -> list[str]:
-
-    # достаём только ключи из таблицы photos
+    """
+    Собирает публичные URL всех фото профиля.
+    Сигнатура и поведение совпадают с прежней функцией.
+    """
     result = await db.execute(
         select(Photo.s3_key)
         .where(Photo.profile_id == profile_id)
