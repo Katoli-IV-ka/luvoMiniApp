@@ -48,9 +48,10 @@ async def like_profile(
         )
     )
     if not exists.scalar_one_or_none():
-        db.add(LikeModel(liker_id=current_user.id, liked_id=user_id))
+        new_like = LikeModel(liker_id=current_user.id, liked_id=user_id)
+        db.add(new_like)
         await db.commit()
-        await db.refresh(LikeModel)
+        await db.refresh(new_like)
 
     # 4) Проверяем взаимный лайк
     rec = await db.execute(
@@ -69,9 +70,10 @@ async def like_profile(
             )
         )
         if not m.scalar_one_or_none():
-            db.add(MatchModel(user1_id=u1, user2_id=u2))
+            new_match = MatchModel(user1_id=u1, user2_id=u2)
+            db.add(new_match)
             await db.commit()
-            await db.refresh(MatchModel)
+            await db.refresh(new_match)
 
         # собираем данные для ответа
         urls = await build_photo_urls(user_id, db)
