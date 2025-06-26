@@ -9,7 +9,7 @@ from models.profile import Profile
 from models.photo import Photo
 
 # Список из 100+ S3-ключей, предоставленный вами
-KEYS = [
+S3_KEYS  = [
     "profiles/img_1_4e14f58aa10a4d86b53cd3c1e814ba7c.jpg",
     "profiles/img_10_875b47e0d0ac4fc3908025e40b1aa388.jpg",
     "profiles/img_11_808ef7cb0df74ea289df21699576dbc5.jpg",
