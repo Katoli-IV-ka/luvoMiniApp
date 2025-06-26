@@ -50,6 +50,16 @@ def upload_file_to_s3(file, file_name: str, bucket_name: str) -> str:
         raise Exception(f"Ошибка при загрузке в S3: {e}")
 
 
+def delete_file_from_s3(s3_key: str, bucket_name: str) -> None:
+    """
+    Удаляет объект из MinIO/S3.
+    """
+    try:
+        _s3.remove_object(bucket_name, s3_key)
+    except S3Error as e:
+        raise Exception(f"Ошибка при удалении из S3: {e}")
+
+
 async def build_photo_urls(profile_id: int, db: AsyncSession) -> list[str]:
     """
     Собирает публичные URL всех фото профиля.

@@ -16,7 +16,7 @@ from models.profile import Profile
 from models.user import User
 from models.photo import Photo
 from schemas.photo import PhotoRead
-from utils.s3 import upload_file_to_s3, build_photo_urls
+from utils.s3 import upload_file_to_s3, build_photo_urls, delete_file_from_s3
 
 router = APIRouter(prefix="/photo", tags=["photo"])
 
@@ -137,50 +137,52 @@ async def delete_photo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1) Проверяем, что такое фото у пользователя есть
+    # 1) Проверяем, что у пользователя есть профиль
+    res_profile = await db.execute(
+        select(Profile).where(Profile.user_id == current_user.id)
+    )
+    current_profile = res_profile.scalar_one_or_none()
+    if not current_profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    # 2) Проверяем, что фото принадлежит этому профилю
     res = await db.execute(
-        select(Photo).where(Photo.id == photo_id, Photo.profile_id == current_user.id)
+        select(Photo).where(
+            Photo.id == photo_id,
+            Photo.profile_id == current_profile.id,
+        )
     )
     photo = res.scalar_one_or_none()
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    # 1.5) Проверяем, что это не последнее фото в профиле
-    count_res = await db.execute(
-        select(func.count(Photo.id)).where(Photo.profile_id == photo.profile_id)
-    )
-
-    total_photos = count_res.scalar_one()
+    # 3) Нельзя удалять последнее фото
+    total_photos = (
+        await db.execute(
+            select(func.count(Photo.id)).where(Photo.profile_id == current_profile.id)
+        )
+    ).scalar_one()
     if total_photos <= 1:
         raise HTTPException(
             status_code=400,
             detail="Cannot delete the last photo in profile"
         )
 
-    """
-    # 2) Удаляем файл из S3 в отдельном потоке
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.AWS_S3_REGION,
-    )
-    
+    # 4) Удаляем файл из S3 через нашу утилиту
     try:
+        # запускаем синхронную функцию в пуле потоков
         await run_in_threadpool(
-            s3_client.delete_object,
-            Bucket=settings.AWS_S3_BUCKET_NAME,
-            Key=photo.s3_key,
+            delete_file_from_s3,
+            photo.s3_key,
+            settings.AWS_S3_BUCKET_NAME,
         )
-    except BotoCoreError as e:
-        # Логируем ошибку, но продолжаем удаление из БД
-        # logger.error(f"S3 delete failed: {e}")
-        raise HTTPException(status_code=500, detail=f"S3 delete error: {e}")
-    """
+    except Exception as e:
+        # если S3 упало — возвращаем 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # 3) Удаляем запись из БД
+    # 5) Удаляем запись из базы
     await db.execute(delete(Photo).where(Photo.id == photo_id))
     await db.commit()
 
+    # FastAPI автоматически вернёт 204 No Content
     return
