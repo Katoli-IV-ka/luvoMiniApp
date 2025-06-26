@@ -1,4 +1,6 @@
-from PIL import Image, UnidentifiedImageError
+# app/core/image_utils.py
+
+from PIL import Image, ExifTags, UnidentifiedImageError
 from io import BytesIO
 
 
@@ -9,7 +11,8 @@ def compress_image_bytes(
     """
     Сжимает изображение в памяти под соцсети:
     - Открывает любой поддерживаемый Pillow формат.
-    - Конвертирует в RGB, если есть альфа-канал.
+    - Корректирует ориентацию по EXIF (удаляет EXIF после поворота).
+    - Конвертирует в RGB, чтобы убрать альфа-канал.
     - Сохраняет в WebP, если исходный формат WebP, иначе в JPEG.
     - Качество по умолчанию снижено до 70 для агрессивного сжатия.
 
@@ -21,33 +24,56 @@ def compress_image_bytes(
     except UnidentifiedImageError:
         raise ValueError("Неподдерживаемый файл — это не изображение")
 
+    # Пытаться получить EXIF и корректировать ориентацию
+    try:
+        exif = img._getexif()
+        if exif is not None:
+            # ищем тег ориентации
+            orientation_key = next(
+                key for key, val in ExifTags.TAGS.items() if val == 'Orientation'
+            )
+            orientation = exif.get(orientation_key)
+            if orientation == 3:
+                img = img.rotate(180, expand=True)
+            elif orientation == 6:
+                img = img.rotate(270, expand=True)
+            elif orientation == 8:
+                img = img.rotate(90, expand=True)
+    except Exception:
+        # если EXIF не читается или нет ориентации — пропускаем
+        pass
+
+    # Очищаем EXIF, чтобы не передавать метаданные дальше
+    if hasattr(img, 'info') and 'exif' in img.info:
+        img.info.pop('exif')
+
     # Сохраняем исходный формат до возможной конвертации
-    orig_fmt = (img.format or "JPEG").upper()
+    orig_fmt = (img.format or 'JPEG').upper()
 
     # Конвертируем в RGB, чтобы убрать альфа-канал
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
+    if img.mode in ('RGBA', 'P'):
+        img = img.convert('RGB')
 
     buf = BytesIO()
 
     # Если исходник был WebP, сохраняем в WebP
-    if orig_fmt == "WEBP":
+    if orig_fmt == 'WEBP':
         img.save(
             buf,
-            "WEBP",
+            'WEBP',
             quality=quality,
             optimize=True
         )
-        ext = "webp"
+        ext = 'webp'
     else:
         # Сохраняем в JPEG для всех остальных форматов
         img.save(
             buf,
-            "JPEG",
+            'JPEG',
             quality=quality,
             optimize=True,
             progressive=True
         )
-        ext = "jpg"
+        ext = 'jpg'
 
     return buf.getvalue(), ext
