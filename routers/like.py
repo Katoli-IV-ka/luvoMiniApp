@@ -20,62 +20,64 @@ router = APIRouter(prefix="", tags=["Likes"])
 
 
 @router.post(
-    "/like/{profile_id}",
+    "/like/{user_id}",  # теперь именно user_id
     response_model=LikeResponse,
     status_code=status.HTTP_200_OK,
     summary="Поставить лайк и узнать, образовался ли матч",
 )
 async def like_profile(
-    profile_id: int,
+    user_id: int,  # user_id, а не profile_id
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LikeResponse:
-    if profile_id == current_user.id:
+    # 1) Нельзя лайкать себя
+    if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot like yourself")
 
-    # 1) Находим профиль и получаем user_id
-    res = await db.execute(select(Profile).where(Profile.id == profile_id))
+    # 2) Проверяем, что у этого user_id есть профиль
+    res = await db.execute(select(Profile).where(Profile.user_id == user_id))
     target_profile = res.scalar_one_or_none()
     if not target_profile:
-        raise HTTPException(status_code=401, detail="Profile not found")
-    target_user_id = target_profile.user_id
+        raise HTTPException(status_code=404, detail="Profile not found")
 
-    # 2) Сохраняем лайк, если его ещё нет
-    existing = await db.execute(
+    # 3) Сохраняем лайк, если его ещё нет
+    exists = await db.execute(
         select(LikeModel).where(
             LikeModel.liker_id == current_user.id,
-            LikeModel.liked_id == target_user_id,
+            LikeModel.liked_id == user_id,
         )
     )
-    if not existing.scalar_one_or_none():
-        db.add(LikeModel(liker_id=current_user.id, liked_id=target_user_id))
+    if not exists.scalar_one_or_none():
+        db.add(LikeModel(liker_id=current_user.id, liked_id=user_id))
         await db.commit()
+        await db.refresh(LikeModel)
 
-    # 3) Проверяем взаимный лайк
-    reciprocal = await db.execute(
+    # 4) Проверяем взаимный лайк
+    rec = await db.execute(
         select(LikeModel).where(
-            LikeModel.liker_id == target_user_id,
+            LikeModel.liker_id == user_id,
             LikeModel.liked_id == current_user.id,
         )
     )
-    if reciprocal.scalar_one_or_none():
-        # создаём Match, если нужно
-        user1, user2 = sorted([current_user.id, target_user_id])
-        matched = await db.execute(
+    if rec.scalar_one_or_none():
+        # создаём матч, если ещё нет
+        u1, u2 = sorted([current_user.id, user_id])
+        m = await db.execute(
             select(MatchModel).where(
-                MatchModel.user1_id == user1,
-                MatchModel.user2_id == user2,
+                MatchModel.user1_id == u1,
+                MatchModel.user2_id == u2,
             )
         )
-        if not matched.scalar_one_or_none():
-            db.add(MatchModel(user1_id=user1, user2_id=user2))
+        if not m.scalar_one_or_none():
+            db.add(MatchModel(user1_id=u1, user2_id=u2))
             await db.commit()
+            await db.refresh(MatchModel)
 
-        # возвращаем данные профиля матча
-        urls = await build_photo_urls(target_user_id, db)
-        match_profile = ProfileRead(
+        # собираем данные для ответа
+        urls = await build_photo_urls(user_id, db)
+        profile_read = ProfileRead(
             id=target_profile.id,
-            user_id=target_user_id,
+            user_id=user_id,
             first_name=target_profile.first_name,
             birthdate=target_profile.birthdate,
             gender=target_profile.gender,
@@ -85,8 +87,9 @@ async def like_profile(
             photos=urls,
             created_at=target_profile.created_at,
         )
-        return LikeResponse(matched=True, match_profile=match_profile)
+        return LikeResponse(matched=True, match_profile=profile_read)
 
+    # 5) Нет взаимки — просто возвращаем matched=False
     return LikeResponse(matched=False)
 
 
