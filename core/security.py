@@ -42,7 +42,7 @@ async def get_current_user(
     return user
 
 
-def verify_init_data(init_data: str, max_age_seconds: int = 86_400*365) -> dict:
+def verify_init_data(init_data: str, max_age_minutes: int = settings.ACCESS_TOKEN_EXPIRE_MINUTES) -> dict:
     """
     Проверяет подпись Telegram.WebApp.initData и возвращает словарь всех параметров,
     кроме hash. Бросает HTTPException(403), если подпись не совпадает,
@@ -92,7 +92,8 @@ def verify_init_data(init_data: str, max_age_seconds: int = 86_400*365) -> dict:
     if auth_date and auth_date.isdigit():
         ts = int(auth_date)
         dt = datetime.utcfromtimestamp(ts)
-        if datetime.utcnow() - dt > timedelta(seconds=max_age_seconds):
+        # Умножаем max_age_minutes на 60, чтобы получить количество секунд
+        if datetime.utcnow() - dt > timedelta(seconds=max_age_minutes * 60):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="init_data is too old"
