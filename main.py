@@ -15,6 +15,7 @@ from routers.photo import router as photo_router
 
 from utils.seed_db import seed
 
+
 app = FastAPI(
     title="Luvo MiniApp Backend",
     version="0.1.0",
@@ -23,10 +24,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # Или список ваших фронтенд-адресов
-    allow_credentials=True,     # Если используете куки или авторизацию
-    allow_methods=["*"],        # GET, POST, PATCH и т.д.
-    allow_headers=["*"],        # Content-Type, Authorization и др.
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth_router)
