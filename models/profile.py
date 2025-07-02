@@ -25,4 +25,4 @@ class Profile(Base):
     user = relationship("User", back_populates="profile", uselist=False)
 
     def __repr__(self):
-        return f"<Profile user_id={self.user_id} instagram={self.instagram_username}>"
+        return f"<Profile user_id={self.telegram_user_id} instagram={self.instagram_username}>"
