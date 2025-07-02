@@ -1,6 +1,9 @@
+# backend/routers/profile.py
+
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.params import Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, update, delete
 from datetime import date
 from typing import List, Optional
 
@@ -13,8 +16,8 @@ from models.user import User
 from models.profile import Profile
 from models.photo import Photo
 from schemas.profile import ProfileRead
+from services.instagram_service import sync_instagram_subscriptions
 from utils.s3 import upload_file_to_s3, build_photo_urls
-
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -37,14 +40,14 @@ async def create_profile(
     db: AsyncSession = Depends(get_db),
 ):
     # Явно проверяем, есть ли профиль в БД
-    stmt = select(Profile).where(Profile.telegram_user_id == current_user.id)
+    stmt = select(Profile).where(Profile.user_id == current_user.id)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=400, detail="Profile already exists")
 
     profile = Profile(
-        telegram_user_id=current_user.telegram_user_id,
+        user_id=current_user.id,
         first_name=first_name,
         birthdate=birthdate,
         gender=gender,
@@ -59,8 +62,12 @@ async def create_profile(
     # Загружаем главное фото
     try:
         s3_key = upload_file_to_s3(file.file, file.filename, settings.AWS_S3_BUCKET_NAME)
+    except ValueError as ve:
+        # неподдерживаемый формат / не изображение
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+        # сбой при работе с S3
+        raise HTTPException(status_code=500, detail=str(e))
 
     photo = Photo(profile_id=profile.id, s3_key=s3_key, is_active=True)
     db.add(photo)
@@ -76,7 +83,7 @@ async def create_profile(
 
     return ProfileRead(
         id=profile.id,
-        user_id=profile.telegram_user_id,
+        user_id=profile.user_id,
         first_name=profile.first_name,
         birthdate=profile.birthdate,
         gender=profile.gender,
@@ -97,10 +104,10 @@ async def read_my_profile(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
 ):
-    prof_stmt = select(Profile).where(Profile.telegram_user_id == current_user.id)
+    prof_stmt = select(Profile).where(Profile.user_id == current_user.id)
     profile = (await db.execute(prof_stmt)).scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Profile not found")
 
     # 2) Явно запросим активные фото
     photos_stmt = select(Photo).where(
@@ -128,7 +135,6 @@ async def read_my_profile(
         photos=photo_urls,
         created_at=profile.created_at,
     )
-
 
 
 @router.put(
@@ -159,12 +165,20 @@ async def update_my_profile(
         profile.birthdate = birthdate
     if about is not None:
         profile.about = about
+
     if instagram_username is not None:
         profile.instagram_username = instagram_username
+        await db.commit()
+        await db.refresh(profile)
+        # Этот вызов заполнит instagram_data и instagram_connections
+        await sync_instagram_subscriptions(
+            telegram_user_id=current_user.telegram_user_id,
+            instagram_username=instagram_username,
+            db=db
+        )
 
     await db.commit()
     await db.refresh(profile)
-
 
     # 3) Обработка фото (если пришли новые)
     if photos is not None:
@@ -185,8 +199,12 @@ async def update_my_profile(
                     upload.filename,  # или f"{current_user.id}_{upload.filename}"
                     settings.AWS_S3_BUCKET_NAME
                 )
+            except ValueError as ve:
+                # неподдерживаемый формат / не изображение
+                raise HTTPException(status_code=400, detail=str(ve))
             except Exception as e:
-                raise HTTPException(status_code=500, detail=f"S3 upload error: {e}")
+                # сбой при работе с S3
+                raise HTTPException(status_code=500, detail=str(e))
 
             # Сохраняем в БД новый Photo
             new_photo = Photo(
@@ -214,3 +232,45 @@ async def update_my_profile(
         created_at=profile.created_at,
     )
 
+
+@router.get(
+    "/{user_id}",
+    response_model=ProfileRead,
+    summary="Получить публичный профиль другого пользователя по user_id",
+)
+async def read_user_profile(
+    user_id: int = Path(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProfileRead:
+    """
+    Возвращает публичную информацию о профиле пользователя,
+    указанного по user_id. Требуется только JWT авторизация.
+    """
+    # 1) Ищем профиль по user_id
+    res = await db.execute(
+        select(Profile).where(Profile.user_id == user_id)
+    )
+    profile: Optional[Profile] = res.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found"
+        )
+
+    # 2) Формируем URL фотографий
+    photos = await build_photo_urls(profile.user_id, db)
+
+    # 3) Собираем и возвращаем Pydantic-модель
+    return ProfileRead(
+        id=profile.id,
+        user_id=profile.user_id,
+        first_name=profile.first_name,
+        birthdate=profile.birthdate,
+        gender=profile.gender,
+        about=profile.about,
+        telegram_username=profile.telegram_username,
+        instagram_username=profile.instagram_username,
+        photos=photos,
+        created_at=profile.created_at,
+    )

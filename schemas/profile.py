@@ -4,9 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-# -------------------------------
-# 1) Базовая схема (ProfileBase)
-# -------------------------------
+
 class ProfileBase(BaseModel):
     first_name: str = Field(..., max_length=100, description="Имя пользователя")
     birthdate: Optional[date] = Field(None, description="Дата рождения (YYYY-MM-DD)")
@@ -17,17 +15,11 @@ class ProfileBase(BaseModel):
     longitude: Optional[float] = None
 
 
-# -------------------------------
-# 2) Схема для создания (Onboarding)
-# -------------------------------
 class ProfileCreate(ProfileBase):
     telegram_username: str = Field(..., max_length=64, description="Telegram username")
     instagram_username: Optional[str] = Field(None, max_length=64, description="Instagram username")
 
 
-# -------------------------------
-# 3) Схема для чтения (Response)
-# -------------------------------
 class ProfileRead(ProfileBase):
     id: int
     user_id: int
@@ -40,9 +32,6 @@ class ProfileRead(ProfileBase):
         from_attributes = True
 
 
-# -------------------------------
-# 4) Схема для обновления (ProfileUpdate)
-# -------------------------------
 class ProfileUpdate(BaseModel):
     first_name: Optional[str] = Field(None, max_length=100)
     birthdate: Optional[date] = None
@@ -55,3 +44,16 @@ class ProfileUpdate(BaseModel):
 
     class Config:
         from_attributes = True #orm_mode
+
+class TopProfileRead(BaseModel):
+    id: int
+    user_id: int
+    first_name: Optional[str]
+    birthdate: Optional[date]
+    gender: Optional[str]
+    about: Optional[str]
+    telegram_username: Optional[str]
+    instagram_username: Optional[str]
+    photos: List[str]
+    created_at: datetime
+    likes_count: int

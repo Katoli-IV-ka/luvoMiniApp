@@ -3,7 +3,7 @@ import hmac
 import hashlib
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy import select
@@ -38,11 +38,11 @@ async def get_current_user(
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
 
 
-def verify_init_data(init_data: str, max_age_seconds: int = 86_400) -> dict:
+def verify_init_data(init_data: str, max_age_seconds: int = 86_400*365) -> dict:
     """
     Проверяет подпись Telegram.WebApp.initData и возвращает словарь всех параметров,
     кроме hash. Бросает HTTPException(403), если подпись не совпадает,
