@@ -1,5 +1,5 @@
 # backend/models/like.py
-from sqlalchemy import Column, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -13,6 +13,9 @@ class Like(Base):
     liker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     liked_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Добавляем новое поле is_ignored
+
+    is_ignored = Column(Boolean, default=False, nullable=False)
 
     liker = relationship("User", foreign_keys=[liker_id], backref="likes_given")
     liked = relationship("User", foreign_keys=[liked_id], backref="likes_received")

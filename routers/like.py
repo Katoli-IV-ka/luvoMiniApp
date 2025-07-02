@@ -96,53 +96,29 @@ async def like_profile(
 
 
 @router.post(
-    "/ignore/{profile_id}",
+    "/ignore/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Отклонить входящий лайк (дизлайк)",
 )
 async def ignore_like(
-    profile_id: int,
+    user_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1) Находим профиль и получаем user_id
-    res = await db.execute(select(Profile).where(Profile.id == profile_id))
-    profile = res.scalar_one_or_none()
-    if not profile:
-        raise HTTPException(status_code=401, detail="Profile not found")
-    target_user_id = profile.user_id
-
-    # 2) Проверяем, что этот пользователь ставил вам лайк
+    # 1) Проверяем, что этот пользователь ставил вам лайк
     res = await db.execute(
         select(LikeModel).where(
-            LikeModel.liker_id == target_user_id,
+            LikeModel.liker_id == user_id,
             LikeModel.liked_id == current_user.id,
         )
     )
-    if not res.scalar_one_or_none():
+    like = res.scalar_one_or_none()
+    if not like:
         raise HTTPException(status_code=400, detail="Этот пользователь не ставил вам лайк")
 
-    # 3) Проверяем, что матча ещё нет
-    user1, user2 = sorted([current_user.id, target_user_id])
-    res = await db.execute(
-        select(MatchModel).where(
-            MatchModel.user1_id == user1,
-            MatchModel.user2_id == user2,
-        )
-    )
-    if res.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Вы уже в матче с этим пользователем")
-
-    # 4) Помечаем как просмотренного/отклонённого
-    res = await db.execute(
-        select(FeedView).where(
-            FeedView.viewer_id == current_user.id,
-            FeedView.viewed_id == target_user_id,
-        )
-    )
-    if not res.scalar_one_or_none():
-        db.add(FeedView(viewer_id=current_user.id, viewed_id=target_user_id))
-        await db.commit()
+    # 2) Помечаем лайк как игнорируемый (дизлайк)
+    like.is_ignored = True  # Отмечаем как игнорируемый
+    await db.commit()
 
     return
 
@@ -178,17 +154,17 @@ async def incoming_likes(
     ids2 = [row[0] for row in res.all()]
     matched_ids = set(ids1 + ids2)
 
-    # 3) user_id всех, которых я отклонил
+    # 3) user_id всех, кого я проигнорировал
     res = await db.execute(
-        select(FeedView.viewed_id)
-        .where(FeedView.viewer_id == current_user.id)
+        select(LikeModel.liker_id)
+        .where(LikeModel.liked_id == current_user.id, LikeModel.is_ignored == True)
     )
-    dismissed_ids = {row[0] for row in res.all()}
+    ignored_ids = {row[0] for row in res.all()}
 
     # 4) Фильтрация кандидатов
     candidate_ids = [
         uid for uid in liker_ids
-        if uid not in matched_ids and uid not in dismissed_ids
+        if uid not in matched_ids and uid not in ignored_ids
     ]
     if not candidate_ids:
         return []
@@ -230,9 +206,10 @@ async def top_profiles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[TopProfileRead]:
+    # 1) Считаем количество лайков, сгруппированных по user_id
     likes_count_subq = (
         select(
-            LikeModel.liked_id.label("user_id"),
+            LikeModel.liked_id.label("user_id"),  # изменили на user_id
             func.count(LikeModel.id).label("likes_count")
         )
         .group_by(LikeModel.liked_id)
@@ -241,12 +218,13 @@ async def top_profiles(
         .subquery()
     )
 
+    # 2) Получаем профили и количество лайков для каждого профиля
     stmt = (
         select(
             Profile,
             likes_count_subq.c.likes_count
         )
-        .join(likes_count_subq, Profile.user_id == likes_count_subq.c.user_id)
+        .join(likes_count_subq, Profile.user_id == likes_count_subq.c.user_id)  # соединяем по user_id
         .order_by(desc(likes_count_subq.c.likes_count))
     )
     res = await db.execute(stmt)
@@ -254,9 +232,11 @@ async def top_profiles(
     if not rows:
         return []
 
+    # 3) Формируем список объектов для ответа
     output: List[TopProfileRead] = []
     for profile, likes_count in rows:
-        urls = await build_photo_urls(profile.user_id, db)
+        # Ищем фото для каждого профиля
+        urls = await build_photo_urls(profile.user_id, db)  # передаем user_id для поиска фото
         output.append(
             TopProfileRead(
                 id=profile.id,
