@@ -42,7 +42,9 @@ async def get_current_user(
     return user
 
 
-def verify_init_data(init_data: str, max_age_minutes: int = settings.ACCESS_TOKEN_EXPIRE_MINUTES) -> dict:
+
+def verify_init_data(init_data: str, max_age_minutes: int = settings.ACCESS_TOKEN_EXPIRE_MINUTES*60) -> dict:
+
     """
     Проверяет подпись Telegram.WebApp.initData и возвращает словарь всех параметров,
     кроме hash. Бросает HTTPException(403), если подпись не совпадает,

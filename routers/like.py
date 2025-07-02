@@ -236,7 +236,7 @@ async def top_profiles(
     output: List[TopProfileRead] = []
     for profile, likes_count in rows:
         # Ищем фото для каждого профиля
-        urls = await build_photo_urls(profile.user_id, db)  # передаем user_id для поиска фото
+        urls = await build_photo_urls(profile.id, db)  # передаем user_id для поиска фото
         output.append(
             TopProfileRead(
                 id=profile.id,
