@@ -1,4 +1,3 @@
-# routers/like.py
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,7 +10,6 @@ from models.user import User
 from models.profile import Profile
 from models.like import Like as LikeModel
 from models.match import Match as MatchModel
-from models.feed_view import FeedView
 from schemas.like import LikeResponse
 from schemas.profile import ProfileRead, TopProfileRead
 from utils.s3 import build_photo_urls
@@ -105,19 +103,19 @@ async def ignore_like(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1) Проверяем, что этот пользователь ставил вам лайк
-    res = await db.execute(
+    result = await db.execute(
         select(LikeModel).where(
-            LikeModel.liker_id == user_id,
+LikeModel.liker_id == user_id,
             LikeModel.liked_id == current_user.id,
         )
     )
-    like = res.scalar_one_or_none()
-    if not like:
+    likes = result.scalars().all()
+
+    if not likes:
         raise HTTPException(status_code=400, detail="Этот пользователь не ставил вам лайк")
 
-    # 2) Помечаем лайк как игнорируемый (дизлайк)
-    like.is_ignored = True  # Отмечаем как игнорируемый
+    for like in likes:
+        like.is_ignored = True
     await db.commit()
 
     return
@@ -236,7 +234,7 @@ async def top_profiles(
     output: List[TopProfileRead] = []
     for profile, likes_count in rows:
         # Ищем фото для каждого профиля
-        urls = await build_photo_urls(profile.id, db)  # передаем user_id для поиска фото
+        urls = await build_photo_urls(profile.user_id, db)  # передаем user_id для поиска фото
         output.append(
             TopProfileRead(
                 id=profile.id,
