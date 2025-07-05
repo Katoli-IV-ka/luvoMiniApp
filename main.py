@@ -11,9 +11,8 @@ from utils.drop_db import async_drop_database
 from routers.auth import router as auth_router
 from routers.user import router as user_router
 from routers.feed import router as feed_router
-from routers.like import router as like_router
-from routers.match import router as match_router
-from routers.photo import router as photo_router
+from routers.interactions import router as interactions_router
+from routers.photos import router as photo_router
 
 from utils.seed_db import seed
 
@@ -34,8 +33,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(feed_router)
-app.include_router(like_router)
-app.include_router(match_router)
+app.include_router(interactions_router)
 app.include_router(photo_router)
 
 

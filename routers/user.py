@@ -15,46 +15,56 @@ from models.photo import Photo
 from schemas.user import UserRead, UserCreate, UserUpdate
 from utils.s3 import upload_file_to_s3, build_photo_urls
 
-router = APIRouter(prefix="/profile", tags=["profile"])  #(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"])  #(prefix="/users", tags=["users"])
 
 
 @router.post(
-    "/create",
+    "/",
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Создать профиль пользователя и загрузить главное фото"
+    summary="Создать свой профиль"
 )
-async def create_user_profile(
-    first_name: str = Form(...),
-    birthdate: date = Form(...),
-    gender: str = Form(...),
-    about: str = Form(...),
-    telegram_username: Optional[str] = Form(None),
-    instagram_username: Optional[str] = Form(None),
-    file: UploadFile = File(...),
+async def create_user(
+    first_name: str = Form(..., description="Имя, которое будет отображаться в профиле"),
+    birthdate: date = Form(..., description="Дата рождения (YYYY-MM-DD)"),
+    gender: str = Form(..., description="Пол: 'male', 'female' или 'other'"),
+    about: str = Form(..., description="О себе"),
+    instagram_username: Optional[str] = Form(None, description="Ваш Instagram username"),
+    file: UploadFile = File(..., description="Главная фотография профиля"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Проверка, что профиль ещё не создан
     if current_user.first_name:
-        raise HTTPException(status_code=400, detail="Profile already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Профиль уже создан"
+        )
 
+    # Заполняем поля профиля
     current_user.first_name = first_name
     current_user.birthdate = birthdate
     current_user.gender = gender
     current_user.about = about
-    current_user.telegram_username = telegram_username
     current_user.instagram_username = instagram_username
 
     db.add(current_user)
     await db.commit()
     await db.refresh(current_user)
 
+    # Загружаем главное фото
     try:
         s3_key = upload_file_to_s3(file.file, file.filename, settings.AWS_S3_BUCKET_NAME)
     except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
     photo = Photo(user_id=current_user.id, s3_key=s3_key, is_general=True)
     db.add(photo)
@@ -64,6 +74,7 @@ async def create_user_profile(
 
     return UserRead(
         user_id=current_user.id,
+        telegram_user_id=current_user.telegram_user_id,
         first_name=current_user.first_name,
         birthdate=current_user.birthdate,
         gender=current_user.gender,
@@ -71,7 +82,9 @@ async def create_user_profile(
         telegram_username=current_user.telegram_username,
         instagram_username=current_user.instagram_username,
         photos=photos,
-        created_at=current_user.created_at
+        is_premium=current_user.is_premium,
+        premium_expires_at=current_user.premium_expires_at,
+        created_at=current_user.created_at,
     )
 
 
@@ -102,7 +115,7 @@ async def read_my_profile(
 
 
 @router.put(
-    "/me/update",
+    "/me",
     response_model=UserRead,
     summary="Обновить свой профиль"
 )
@@ -185,10 +198,12 @@ async def read_user_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    user = await db.get(User, user_id)
-    if not user or not user.first_name:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    photos = await build_photo_urls(user_id, db)
+    stmt = select(User).where(User.id == user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "Пользователь не найден")
+    photos = await build_photo_urls(user.id, db)
     return UserRead(
         user_id=user.id,
         telegram_user_id=user.telegram_user_id,

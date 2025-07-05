@@ -11,7 +11,7 @@ from models.photo import Photo
 from schemas.photo import PhotoRead
 from utils.s3 import upload_file_to_s3, delete_file_from_s3
 
-router = APIRouter(prefix="/photo", tags=["photo"])
+router = APIRouter(prefix="/photos", tags=["photos  "])
 
 # Максимальное число фото на пользователя
 MAX_PHOTOS = getattr(settings, "MAX_PHOTOS", 6)
@@ -20,7 +20,7 @@ MAX_PHOTOS = getattr(settings, "MAX_PHOTOS", 6)
     "/",
     response_model=PhotoRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Загрузить одно фото пользователя и вернуть объект PhotoRead",
+    summary="Загрузить фото пользователя",
 )
 async def upload_photo(
     photo: UploadFile = File(...),
@@ -68,7 +68,7 @@ async def upload_photo(
 @router.get(
     "/",
     response_model=List[PhotoRead],
-    summary="Получить список всех фото пользователя",
+    summary="Список моих фото",
 )
 async def list_photos(
     db: AsyncSession = Depends(get_db),

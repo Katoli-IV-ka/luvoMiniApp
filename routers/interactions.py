@@ -1,11 +1,12 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, or_
 
 from core.database import get_db
 from core.security import get_current_user
+from models.feed_view import FeedView
 from models.user import User
 from models.like import Like as LikeModel
 from models.match import Match as MatchModel
@@ -13,13 +14,34 @@ from schemas.like import LikeResponse
 from schemas.user import UserRead, TopUserRead
 from utils.s3 import build_photo_urls
 
-router = APIRouter(prefix="", tags=["likes"])
+
+router = APIRouter(prefix="/interactions", tags=["interactions"])
+
+
+@router.post(
+    "/view/{user_id}",
+    status_code=status.HTTP_201_CREATED,
+    summary="Записать просмотр"
+)
+async def view_profile(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя просматривать свой профиль")
+    # Записываем просмотр
+    view = FeedView(viewer_id=current_user.id, viewed_id=user_id)
+    db.add(view)
+    await db.commit()
+
+    return
 
 
 @router.post(
     "/like/{user_id}",
     response_model=LikeResponse,
-    summary="Поставить лайк и узнать, образовался ли матч"
+    summary="Поставить лайк"
 )
 async def like_user(
     user_id: int,
@@ -122,7 +144,6 @@ async def ignore_user(
     await db.commit()
     return
 
-
 @router.get(
     "/likes",
     response_model=List[UserRead],
@@ -211,3 +232,50 @@ async def top_liked_users(
             likes_count=likes_count,
         ))
     return output
+
+
+@router.get(
+    "/",
+    response_model=List[UserRead],
+    summary="Список пользователей, с которыми у вас совпадения"
+)
+async def get_my_matches(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[UserRead]:
+    # Ищем все матчи, где текущий пользователь — участник
+    stmt = select(MatchModel).where(
+        or_(
+            MatchModel.user1_id == current_user.id,
+            MatchModel.user2_id == current_user.id,
+        )
+    )
+    result = await db.execute(stmt)
+    matches = result.scalars().all()
+
+    out: List[UserRead] = []
+    for match in matches:
+        # Определяем ID другого пользователя в матче
+        other_id = match.user2_id if match.user1_id == current_user.id else match.user1_id
+        user = await db.get(User, other_id)
+        if not user or not user.first_name:
+            continue
+
+        photos = await build_photo_urls(other_id, db)
+        out.append(UserRead(
+            user_id=user.id,
+            telegram_user_id=user.telegram_user_id,
+            first_name=user.first_name,
+            birthdate=user.birthdate,
+            gender=user.gender,
+            about=user.about,
+            latitude=user.latitude,
+            longitude=user.longitude,
+            telegram_username=user.telegram_username,
+            instagram_username=user.instagram_username,
+            is_premium=user.is_premium,
+            premium_expires_at=user.premium_expires_at,
+            created_at=user.created_at,
+            photos=photos,
+        ))
+    return out

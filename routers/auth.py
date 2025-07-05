@@ -17,9 +17,9 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post(
-    "/",
+    "/login",
     response_model=TokenResponse,
-    summary="Авторизация через Telegram WebApp initData → выдаёт JWT"
+    summary="Авторизация через Telegram WebApp initData → JWT"
 )
 async def login(
     init_data: InitDataSchema,
@@ -30,15 +30,16 @@ async def login(
     if not user_obj:
         raise HTTPException(status_code=400, detail="Missing 'user' in init_data")
     user_data = json.loads(user_obj)
-    tg_id = user_data.get("id")
-    if not tg_id:
+    telegram_user_id = user_data.get("id")
+    telegram_username = user_data.get("username")
+    if not telegram_user_id:
         raise HTTPException(status_code=400, detail="Invalid 'user' data in init_data")
 
-    stmt = select(User).where(User.telegram_user_id == tg_id)
+    stmt = select(User).where(User.telegram_user_id == telegram_user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if not user:
-        user = User(telegram_user_id=tg_id)
+        user = User(telegram_user_id=telegram_user_id, telegram_username=telegram_username)
         db.add(user)
         await db.commit()
         await db.refresh(user)

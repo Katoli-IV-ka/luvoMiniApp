@@ -1,4 +1,4 @@
-# backend/models/photo.py
+# backend/models/photos.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship

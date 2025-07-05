@@ -18,7 +18,7 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 @router.get(
     "/",
     response_model=List[UserRead],
-    summary="Получить список кандидатов в ленте"
+    summary="Получить ленту кандидатов"
 )
 async def get_feed(
     limit: int = Query(20, ge=1, le=50),
@@ -68,21 +68,4 @@ async def get_feed(
     return feed
 
 
-@router.post(
-    "/{user_id}/view",
-    status_code=status.HTTP_201_CREATED,
-    summary="Записать просмотр профиля"
-)
-async def view_profile(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if user_id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя просматривать свой профиль")
-    # Записываем просмотр
-    view = FeedView(viewer_id=current_user.id, viewed_id=user_id)
-    db.add(view)
-    await db.commit()
 
-    return
