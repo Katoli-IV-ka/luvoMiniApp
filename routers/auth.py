@@ -58,7 +58,7 @@ async def login(
 
     expires_ms = int(expires.timestamp() * 1000)
 
-    has_profile = bool(user.full_name)
+    has_profile = bool(user.first_name)
 
     return TokenResponse(
         access_token=access_token,
