@@ -235,7 +235,7 @@ async def top_liked_users(
 
 
 @router.get(
-    "/",
+    "/matches",
     response_model=List[UserRead],
     summary="Список пользователей, с которыми у вас совпадения"
 )
