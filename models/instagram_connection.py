@@ -8,22 +8,9 @@ class InstagramConnection(Base):
     __tablename__ = "instagram_connections"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False
-    )
-    connected_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False
-    )
-    type = Column(
-        Enum("subscription", "follower", name="ig_connection_type"),
-        nullable=False
-    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    created_at = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    type = Column(Enum("subscription", "follower", name="ig_connection_type"), nullable=False)
 
     __table_args__ = (
         UniqueConstraint(

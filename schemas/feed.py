@@ -1,4 +1,10 @@
-from pydantic import BaseModel
+# backend/schemas/feed.py
+
+from pydantic import BaseModel, Field
+
 
 class ViewRequest(BaseModel):
-    profile_id: int
+    user_id: int = Field(..., alias="user_id", description="ID пользователя")
+
+    class Config:
+        validate_by_name = True

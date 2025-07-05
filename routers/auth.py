@@ -1,23 +1,20 @@
-# backend/routers/auth.py
+# routers/auth.py
 import json
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter
-
-from schemas.auth import TokenResponse, InitDataSchema
-from models.profile import Profile
+from fastapi import APIRouter, Depends, HTTPException
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from datetime import datetime, timedelta
 
 from core.security import verify_init_data
 from core.config import settings
 from core.database import get_db
 from models.user import User
+from schemas.auth import TokenResponse, InitDataSchema
 
-from fastapi import Depends, HTTPException
-from jose import jwt
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
-router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post(
     "/",
@@ -28,7 +25,6 @@ async def login(
     init_data: InitDataSchema,
     db: AsyncSession = Depends(get_db),
 ):
-    # 1) валидируем подпись и парсим init_data
     data = verify_init_data(init_data.init_data)
     user_obj = data.get("user")
     if not user_obj:
@@ -38,7 +34,6 @@ async def login(
     if not tg_id:
         raise HTTPException(status_code=400, detail="Invalid 'user' data in init_data")
 
-    # 2) ищем или создаём User
     stmt = select(User).where(User.telegram_user_id == tg_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -48,10 +43,9 @@ async def login(
         await db.commit()
         await db.refresh(user)
 
-    # 3) Генерируем JWT с полем exp
+
     now = datetime.utcnow()
     expires = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-      # кладём в payload claim exp (в секундах)
     token_payload = {
         "user_id": user.id,
         "exp": expires
@@ -61,21 +55,14 @@ async def login(
         settings.TELEGRAM_BOT_TOKEN,
         algorithm = "HS256"
     )
-    # миллисекунды с 1970-01-01 UTC
+
     expires_ms = int(expires.timestamp() * 1000)
 
+    has_profile = bool(user.full_name)
 
-    # 4) проверяем, есть ли профиль
-    stmt_profile = select(Profile.id).where(Profile.user_id == user.id).limit(1)
-    result_profile = await db.execute(stmt_profile)
-    has_profile = result_profile.scalar_one_or_none() is not None
-
-    # 5) возвращаем токен и флаг наличия профиля
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
         has_profile=has_profile,
         expires_in_ms=expires_ms
     )
-
-

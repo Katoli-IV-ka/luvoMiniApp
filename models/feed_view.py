@@ -12,7 +12,7 @@ class FeedView(Base):
     id = Column(Integer, primary_key=True, index=True)
     viewer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     viewed_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    viewed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     viewer = relationship("User", foreign_keys=[viewer_id], backref="viewed_profiles")
     viewed = relationship("User", foreign_keys=[viewed_id], backref="viewed_by")

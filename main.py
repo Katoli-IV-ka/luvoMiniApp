@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +9,7 @@ from models.base import Base
 from utils.drop_db import async_drop_database
 
 from routers.auth import router as auth_router
-from routers.profile import router as profile_router
+from routers.user import router as user_router
 from routers.feed import router as feed_router
 from routers.like import router as like_router
 from routers.match import router as match_router
@@ -30,7 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
-app.include_router(profile_router)
+app.include_router(user_router)
 app.include_router(feed_router)
 app.include_router(like_router)
 app.include_router(match_router)
@@ -39,14 +41,19 @@ app.include_router(photo_router)
 
 @app.on_event("startup")
 async def on_startup():
-    if settings.RESET_DB_ON_STARTUP == "true":
+
+    if settings.RESET_DB_ON_STARTUP :
         await async_drop_database()
 
-    if settings.SEED_DB == "true":
-        await seed()
-
+    # Сначала создаём все таблицы
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Затем — сеем, если нужно
+    if settings.SEED_DB:
+        asyncio.create_task(seed())
+
+
 
 
 @app.get("/")

@@ -12,7 +12,7 @@ class Match(Base):
     id = Column(Integer, primary_key=True, index=True)
     user1_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     user2_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    matched_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     user1 = relationship("User", foreign_keys=[user1_id], backref="matches_as_user1")
     user2 = relationship("User", foreign_keys=[user2_id], backref="matches_as_user2")

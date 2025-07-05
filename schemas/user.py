@@ -1,42 +1,87 @@
-from typing import Optional
-from datetime import datetime
+from typing import Optional, List
+from datetime import datetime, date
 
 from pydantic import BaseModel, Field
 
-from schemas.profile import ProfileRead
-
 
 class UserBase(BaseModel):
-    telegram_user_id: int = Field(..., description="ID пользователя из Telegram")
+    telegram_user_id: Optional[int] = Field(..., description="ID пользователя из Telegram")
+
+    class Config:
+        from_attributes = True
+        validate_by_name = True
 
 
 class UserCreate(UserBase):
-    pass
-    # Поскольку при создании записи мы уже получаем `telegram_user_id`
-    # из запроса (initData), других полей на этапе создания нам не нужно.
-    # is_premium по умолчанию = False, premium_expires_at (None).
-
-
-class UserRead(UserBase):
-    id: int = Field(..., description="PK в базе данных")
-    is_premium: bool = Field(..., description="Признак премиума")
-    premium_expires_at: Optional[datetime] = Field(
-        None, description="Дата окончания подписки (если премиум)"
-    )
-    created_at: datetime = Field(..., description="Дата и время создания аккаунта")
-    profile: Optional[ProfileRead] = None
+    first_name: str = Field(..., max_length=100, description="Имя пользователя")
+    birthdate: date = Field(..., description="Дата рождения (YYYY-MM-DD)")
+    gender: Optional[str] = Field(None, max_length=10, description="Пол: 'male', 'female', 'other'")
+    about: Optional[str] = Field(None, description="О себе (текстовое описание)")
+    latitude: Optional[float] = Field(None, description="Широта пользователя")
+    longitude: Optional[float] = Field(None, description="Долгота пользователя")
+    telegram_username: Optional[str] = Field(None, max_length=64, description="Telegram username")
+    instagram_username: Optional[str] = Field(None, max_length=64, description="Instagram username")
+    is_premium: Optional[bool] = Field(False, description="Признак премиума")
+    premium_expires_at: Optional[datetime] = Field(None, description="Дата окончания премиума")
 
     class Config:
         from_attributes = True
-        # Чтобы Pydantic понимал, что передаётся SQLAlchemy-модель.
+        validate_by_name = True
 
 
 class UserUpdate(BaseModel):
-    # Позволяет клиенту обновить (например) статус премиума вручную (если нужна админка)
+    first_name: Optional[str] = Field(None, max_length=100, description="Имя пользователя")
+    birthdate: Optional[date] = Field(None, description="Дата рождения (YYYY-MM-DD)")
+    gender: Optional[str] = Field(None, max_length=10, description="Пол: 'male', 'female', 'other'")
+    about: Optional[str] = Field(None, description="О себе (текстовое описание)")
+    latitude: Optional[float] = Field(None, description="Широта пользователя")
+    longitude: Optional[float] = Field(None, description="Долгота пользователя")
+    telegram_username: Optional[str] = Field(None, max_length=64, description="Telegram username")
+    instagram_username: Optional[str] = Field(None, max_length=64, description="Instagram username")
     is_premium: Optional[bool] = Field(None, description="Признак премиума")
-    premium_expires_at: Optional[datetime] = Field(
-        None, description="Дата окончания премиума"
-    )
+    premium_expires_at: Optional[datetime] = Field(None, description="Дата окончания премиума")
 
     class Config:
         from_attributes = True
+        validate_by_name = True
+
+
+class UserRead(UserBase):
+    user_id: int = Field(..., alias="user_id", description="PK в базе данных")
+
+    first_name: str = Field(..., max_length=100, description="Имя пользователя")
+    birthdate: Optional[date] = Field(None, description="Дата рождения")
+    gender: Optional[str] = Field(None, description="Пол")
+    about: Optional[str] = Field(None, description="О себе")
+    photos: List[str] = Field([], description="Список URL фотографий профиля")
+
+    latitude: Optional[float] = Field(None, description="Широта пользователя")
+    longitude: Optional[float] = Field(None, description="Долгота пользователя")
+
+    telegram_username: Optional[str] = Field(None, description="Telegram username")
+    instagram_username: Optional[str] = Field(None, description="Instagram username")
+
+    is_premium: Optional[bool] = Field(..., description="Признак премиума")
+    premium_expires_at: Optional[datetime] = Field(None, description="Дата окончания подписки")
+    created_at: datetime = Field(..., description="Дата и время создания аккаунта")
+
+    class Config:
+        from_attributes = True
+        validate_by_name = True
+
+
+class TopUserRead(BaseModel):
+    user_id: int = Field(..., alias="user_id")
+    first_name: Optional[str]
+    birthdate: Optional[date]
+    gender: Optional[str]
+    about: Optional[str]
+    telegram_username: Optional[str]
+    instagram_username: Optional[str]
+    photos: List[str]
+    created_at: datetime
+    likes_count: int
+
+    class Config:
+        from_attributes = True
+        validate_by_name = True

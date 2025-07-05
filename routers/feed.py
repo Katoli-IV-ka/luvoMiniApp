@@ -1,177 +1,88 @@
-from typing import List, Set
-
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, not_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from core.database import get_db
-from models.instagram_connection import InstagramConnection
-
-from models.user import User
-from models.profile import Profile
-from models.feed_view import FeedView
 from core.security import get_current_user
-from schemas.feed import ViewRequest
-from schemas.profile import ProfileRead
+from models.user import User
+from models.like import Like as LikeModel
+from models.match import Match as MatchModel
+from models.feed_view import FeedView
+from schemas.user import UserRead
 from utils.s3 import build_photo_urls
 
-router = APIRouter(prefix="/feed", tags=["Feed"])
+router = APIRouter(prefix="/feed", tags=["feed"])
 
 
 @router.get(
     "/",
-    response_model=List[ProfileRead],
-    summary="Получить пачку профилей для ленты",
+    response_model=List[UserRead],
+    summary="Получить список кандидатов в ленте"
 )
-async def get_feed_batch(
-    skip: int = Query(0, ge=0, description="Сколько профилей пропустить"),
-    limit: int = Query(10, ge=1, le=50, description="Сколько профилей вернуть"),
+async def get_feed(
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[ProfileRead]:
-    # 1) Свой профиль
-    res = await db.execute(
-        select(Profile).where(Profile.user_id == current_user.id)
-    )
-    my_profile = res.scalar_one_or_none()
-    if not my_profile:
-        raise HTTPException(status_code=401, detail="Your profile not found")
+) -> List[UserRead]:
+    # Формируем подзапросы для исключения: лайкнутых, заматченных
+    sub_liked = select(LikeModel.liked_id).where(LikeModel.liker_id == current_user.id)
+    sub_matched1 = select(MatchModel.user1_id).where(MatchModel.user2_id == current_user.id)
+    sub_matched2 = select(MatchModel.user2_id).where(MatchModel.user1_id == current_user.id)
 
-    # 2) Уже просмотренные user_id
-    res = await db.execute(
-        select(FeedView.viewed_id).where(FeedView.viewer_id == current_user.id)
-    )
-    viewed: Set[int] = {r[0] for r in res.all()}
-
-    # 3) Первый уровень: подписки и подписчики
-    res = await db.execute(
-        select(InstagramConnection.connected_id)
+    stmt = (
+        select(User)
         .where(
-            InstagramConnection.user_id == current_user.id,
-            InstagramConnection.type == "subscription"
+            User.id != current_user.id,
+            not_(User.id.in_(sub_liked)),
+            not_(User.id.in_(sub_matched1)),
+            not_(User.id.in_(sub_matched2)),
         )
+        .order_by(User.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
-    subs = {r[0] for r in res.all()}
-    res = await db.execute(
-        select(InstagramConnection.user_id)
-        .where(
-            InstagramConnection.connected_id == current_user.id,
-            InstagramConnection.type == "subscription"
-        )
-    )
-    followers = {r[0] for r in res.all()}
-    lvl1 = (subs | followers) - {current_user.id} - viewed
+    result = await db.execute(stmt)
+    users = result.scalars().all()
 
-    # 4) Второй уровень: подписки моих подписок
-    res = await db.execute(
-        select(InstagramConnection.connected_id)
-        .where(
-            InstagramConnection.user_id.in_(subs),
-            InstagramConnection.type == "subscription"
-        )
-    )
-    lvl2 = set(r[0] for r in res.all()) - lvl1 - {current_user.id} - viewed
-
-    # 5) Все остальные
-    res = await db.execute(
-        select(Profile.user_id)
-        .where(
-            Profile.user_id != current_user.id,
-            Profile.user_id.not_in(viewed | lvl1 | lvl2),
-            Profile.gender != my_profile.gender
-        )
-    )
-    others = [r[0] for r in res.all()]
-
-    # 6) Собираем единый упорядоченный список и применяем skip/limit
-    ordered = list(lvl1) + list(lvl2) + others
-    page = ordered[skip: skip + limit]
-
-    # 6.1) Если после всех уровней нет профилей — забираем случайных
-    if not page:
-        res = await db.execute(
-            select(Profile)
-            .where(
-                Profile.user_id != current_user.id,
-                Profile.gender != my_profile.gender,
-            )
-            .order_by(func.random())
-            .limit(limit)
-        )
-        random_profiles = res.scalars().all()
-        batch = []
-        for p in random_profiles:
-            urls = await build_photo_urls(p.user_id, db)
-            batch.append(
-                ProfileRead(
-                    id=p.id,
-                    user_id=p.user_id,
-                    first_name=p.first_name,
-                    birthdate=p.birthdate,
-                    gender=p.gender,
-                    about=p.about,
-                    telegram_username=p.telegram_username,
-                    instagram_username=p.instagram_username,
-                    photos=urls,
-                    created_at=p.created_at,
-                )
-            )
-        return batch
-
-    # 7) Достаём Profile для этих user_id
-    res = await db.execute(
-        select(Profile).where(Profile.user_id.in_(page))
-    )
-    profiles = {p.user_id: p for p in res.scalars().all()}
-
-    # 8) Формируем ответ в том же порядке
-    batch: List[ProfileRead] = []
-    for uid in page:
-        p = profiles.get(uid)
-        urls = await build_photo_urls(uid, db)
-        batch.append(
-            ProfileRead(
-                id=p.id,
-                user_id=p.user_id,
-                first_name=p.first_name,
-                birthdate=p.birthdate,
-                gender=p.gender,
-                about=p.about,
-                telegram_username=p.telegram_username,
-                instagram_username=p.instagram_username,
-                photos=urls,
-                created_at=p.created_at,
-            )
-        )
-    return batch
+    feed: List[UserRead] = []
+    for user in users:
+        photos = await build_photo_urls(user.id, db)
+        feed.append(UserRead(
+            user_id=user.id,
+            telegram_user_id=user.telegram_user_id,
+            first_name=user.first_name,
+            birthdate=user.birthdate,
+            gender=user.gender,
+            about=user.about,
+            latitude=user.latitude,
+            longitude=user.longitude,
+            telegram_username=user.telegram_username,
+            instagram_username=user.instagram_username,
+            is_premium=user.is_premium,
+            premium_expires_at=user.premium_expires_at,
+            created_at=user.created_at,
+            photos=photos,
+        ))
+    return feed
 
 
 @router.post(
-    "/view",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Отметить просмотр профиля в ленте",
+    "/{user_id}/view",
+    status_code=status.HTTP_201_CREATED,
+    summary="Записать просмотр профиля"
 )
-async def mark_view(
-    req: ViewRequest,
+async def view_profile(
+    user_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1) Проверка существования
-    res = await db.execute(
-        select(Profile).where(Profile.id == req.profile_id)
-    )
-    profile = res.scalar_one_or_none()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    if user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя просматривать свой профиль")
+    # Записываем просмотр
+    view = FeedView(viewer_id=current_user.id, viewed_id=user_id)
+    db.add(view)
+    await db.commit()
 
-    # 2) Запись в FeedView
-    res = await db.execute(
-        select(FeedView).where(
-            FeedView.viewer_id == current_user.id,
-            FeedView.viewed_id == profile.user_id
-        )
-    )
-    if not res.scalar_one_or_none():
-        db.add(FeedView(viewer_id=current_user.id, viewed_id=profile.user_id))
-        await db.commit()
     return

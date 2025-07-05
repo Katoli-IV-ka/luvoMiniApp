@@ -1,15 +1,40 @@
+# backend/utils/seed_db.py
 import asyncio
 import random
-from datetime import date
+from datetime import datetime, timedelta
+from sqlalchemy import select
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import AsyncSessionLocal
+from core.id_generator import generate_random_id
 from models.user import User
-from models.profile import Profile
 from models.photo import Photo
+from models.like import Like
+from models.match import Match
+from models.feed_view import FeedView
 
-# Список из 100+ S3-ключей, предоставленный вами
-S3_KEYS  = [
+# Константы для семплов
+NUM_USERS = 20
+MAX_PHOTOS_PER_USER = 5
+NUM_LIKES = 50
+NUM_VIEWS = 60
+NUM_MATCHES = 10
+
+# Пример рандомных имен
+FIRST_NAMES = [
+    "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Casey", "Jamie", "Reese", "Drew", "Quinn",
+    "Riley", "Avery", "Cameron", "Logan", "Hayden", "Peyton", "Skyler", "Dakota", "Emerson", "Kai"
+]
+GENDERS = ["male", "female", "other"]
+ABOUT_TEMPLATES = [
+    "Love hiking and outdoor adventures.",
+    "Coffee fanatic and book lover.",
+    "Tech enthusiast and amateur chef.",
+    "Travel addict exploring the world.",
+    "Music is life. Always at concerts.",
+]
+
+# Фиксированный список ключей S3 для фото
+S3_KEYS = [
     "profiles/img_1_4e14f58aa10a4d86b53cd3c1e814ba7c.jpg",
     "profiles/img_10_875b47e0d0ac4fc3908025e40b1aa388.jpg",
     "profiles/img_11_808ef7cb0df74ea289df21699576dbc5.jpg",
@@ -32,94 +57,84 @@ S3_KEYS  = [
     "profiles/img_9_488edbdae5b743f284ad394066fd129c.jpg",
 ]
 
-
-# Заданные имена и даты рождения для примера (19 пользователей)
-SAMPLE_USERS = [
-    {"first_name": "Alice",  "birthdate": date(1990, 5, 1),  "gender": "female", "about": "Hello, I'm Alice!"},
-    {"first_name": "Bob",    "birthdate": date(1988, 8, 12), "gender": "male",   "about": "Hey there, I'm Bob."},
-    {"first_name": "Cathy",  "birthdate": date(1992, 3, 7),  "gender": "female", "about": "Artist and traveler."},
-    {"first_name": "David",  "birthdate": date(1991, 11, 22),"gender": "male",   "about": "Tech enthusiast."},
-    {"first_name": "Emma",   "birthdate": date(1993, 2, 14), "gender": "female", "about": "Book lover."},
-    {"first_name": "Frank",  "birthdate": date(1987, 7, 30), "gender": "male",   "about": "Avid cyclist."},
-    {"first_name": "Grace",  "birthdate": date(1994, 9, 9),  "gender": "female", "about": "Music is life."},
-    {"first_name": "Henry",  "birthdate": date(1989, 4, 18), "gender": "male",   "about": "Coffee addict."},
-    {"first_name": "Irene",  "birthdate": date(1995, 1, 25), "gender": "female", "about": "Nature photographer."},
-    {"first_name": "Jack",   "birthdate": date(1991, 10, 10),"gender": "male",   "about": "Gamer and coder."},
-    {"first_name": "Karen",  "birthdate": date(1992, 12, 5), "gender": "female", "about": "Yoga instructor."},
-    {"first_name": "Leo",    "birthdate": date(1986, 6, 6),  "gender": "male",   "about": "Chef in the making."},
-    {"first_name": "Mia",    "birthdate": date(1993, 8, 20), "gender": "female", "about": "Travel blogger."},
-    {"first_name": "Noah",   "birthdate": date(1988, 2, 28), "gender": "male",   "about": "Movie buff."},
-    {"first_name": "Olivia","birthdate": date(1990, 7, 7),  "gender": "female", "about": "Fitness freak."},
-    {"first_name": "Paul",   "birthdate": date(1989, 3, 3),  "gender": "male",   "about": "Musician."},
-    {"first_name": "Quinn",  "birthdate": date(1994, 5, 15), "gender": "female", "about": "Tattoo artist."},
-    {"first_name": "Rachel","birthdate": date(1991, 9, 9),  "gender": "female", "about": "Blogger and designer."},
-    {"first_name": "Steve",  "birthdate": date(1987, 12, 12),"gender": "male",   "about": "Adventure seeker."},
-    {"first_name": "Tom",    "birthdate": date(1990, 1, 1),  "gender": "male",   "about": "Road trip lover."},
-    {"first_name": "Uma",    "birthdate": date(1992, 4, 4),  "gender": "female", "about": "Coffee shop hopper."},
-    {"first_name": "Victor","birthdate": date(1985, 5, 5),  "gender": "male",   "about": "History buff."},
-    {"first_name": "Wendy", "birthdate": date(1993, 6, 6),  "gender": "female", "about": "Outdoor enthusiast."},
-    {"first_name": "Xavier","birthdate": date(1988, 7, 7),  "gender": "male",   "about": "Tech blogger."},
-    {"first_name": "Yara",   "birthdate": date(1994, 8, 8),  "gender": "female", "about": "Yoga and meditation."},
-    {"first_name": "Zack",   "birthdate": date(1991, 9, 9),  "gender": "male",   "about": "Video editor."},
-    {"first_name": "Anna",   "birthdate": date(1990, 10, 10),"gender": "female", "about": "Photographer."},
-    {"first_name": "Ben",    "birthdate": date(1989, 11, 11),"gender": "male",   "about": "Fitness coach."},
-    {"first_name": "Cara",   "birthdate": date(1992, 12, 12),"gender": "female", "about": "Graphic designer."},
-    {"first_name": "Derek",  "birthdate": date(1987, 3, 3),  "gender": "male",   "about": "Guitarist."},
-    {"first_name": "Ella",   "birthdate": date(1993, 2, 2),  "gender": "female", "about": "Chef."},
-    {"first_name": "Felix",  "birthdate": date(1991, 4, 4),  "gender": "male",   "about": "Writer."},
-    {"first_name": "Gina",   "birthdate": date(1994, 5, 5),  "gender": "female", "about": "Musician."},
-    {"first_name": "Hugo",   "birthdate": date(1988, 6, 6),  "gender": "male",   "about": "Photographer."},
-    {"first_name": "Ivy",    "birthdate": date(1992, 7, 7),  "gender": "female", "about": "Artist."},
-    {"first_name": "Kevin","birthdate": date(1990, 8, 8),   "gender": "male",   "about": "Entrepreneur."},
-    {"first_name": "Linda","birthdate": date(1989, 9, 9),   "gender": "female", "about": "Teacher."},
-    {"first_name": "Mike",   "birthdate": date(1991, 10, 10),"gender": "male",   "about": "Blogger."},
-    {"first_name": "Nina",   "birthdate": date(1993, 11, 11),"gender": "female", "about": "Chef."},
-    {"first_name": "Oscar",  "birthdate": date(1992, 12, 1), "gender": "male",   "about": "Startup founder."},
-]
-
 async def seed():
-    async with AsyncSessionLocal() as session:  # type: AsyncSession
-        for idx, data in enumerate(SAMPLE_USERS, start=1):
-            print(f"SEED: Process...\titem:{idx}")
-
-            # 1) Создаём пользователя
+    # Инициализация БД (создание схем)
+    async with AsyncSessionLocal() as session:
+        users = []
+        for _ in range(NUM_USERS):
+            uid = generate_random_id('user')
             user = User(
-                telegram_user_id=100_000 + idx,
-                is_premium=False
+                id=uid,
+                telegram_user_id=random.randint(100000, 999999),
+                first_name=random.choice(FIRST_NAMES),
+                birthdate=datetime.utcnow().date() - timedelta(days=random.randint(18*365, 45*365)),
+                gender=random.choice(GENDERS),
+                about=random.choice(ABOUT_TEMPLATES),
+                latitude=round(random.uniform(-90, 90), 6),
+                longitude=round(random.uniform(-180, 180), 6),
+                telegram_username=f'user{uid}',
+                instagram_username=f'inst{uid}',
+                is_premium=random.choice([False, True]),
+                premium_expires_at=(datetime.utcnow() + timedelta(days=30)) if random.random() < 0.2 else None,
+                created_at=datetime.utcnow()
             )
             session.add(user)
-            await session.flush()  # чтобы получить user.id
+            users.append(user)
+        await session.commit()
 
-            # 2) Создаём профиль
-            telegram_un = f"{data['first_name'].lower()}{idx}"
-            instagram_un = f"{data['first_name'].lower()}_insta{idx}"
-            profile = Profile(
-                user_id=user.id,
-                first_name=data["first_name"],
-                birthdate=data["birthdate"],
-                gender=data["gender"],
-                about=data["about"],
-                telegram_username=telegram_un,
-                instagram_username=instagram_un,
-            )
-            session.add(profile)
-            await session.flush()  # чтобы получить profile.id
-
-            # 3) Привязываем от 1 до 6 случайных S3-ключей
-            count = random.randint(1, 6)
-            chosen_keys = random.sample(S3_KEYS, count)
-            for s3_key in chosen_keys:
+        # 2. Добавляем фото к каждому пользователю из фиксированного списка
+        for user in users:
+            count = random.randint(1, min(MAX_PHOTOS_PER_USER, len(S3_KEYS)))
+            keys = random.sample(S3_KEYS, count)
+            for i, s3_key in enumerate(keys):
+                pid = generate_random_id('photo')
                 photo = Photo(
-                    profile_id=profile.id,
+                    id=pid,
+                    user_id=user.id,
                     s3_key=s3_key,
-                    is_active=True
+                    is_general=(i == 0),
+                    created_at=datetime.utcnow()
                 )
                 session.add(photo)
-
-        # 4) Финальный коммит всех изменений
         await session.commit()
-        print("Seeding complete.")
 
-if __name__ == "__main__":
+        # 3. Генерируем лайки
+        all_ids = [u.id for u in users]
+        for _ in range(NUM_LIKES):
+            liker, liked = random.sample(all_ids, 2)
+            exists = await session.execute(
+                select(Like).where(Like.liker_id == liker, Like.liked_id == liked)
+            )
+            if exists.scalar_one_or_none():
+                continue
+            lid = generate_random_id('like')
+            like = Like(id=lid, liker_id=liker, liked_id=liked, created_at=datetime.utcnow())
+            session.add(like)
+        await session.commit()
+
+        # 4. Создаем матчи из взаимных лайков
+        likes = (await session.execute(select(Like))).scalars().all()
+        pairs = set()
+        for l in likes:
+            for r in likes:
+                if l.liker_id == r.liked_id and l.liked_id == r.liker_id:
+                    pair = tuple(sorted((l.liker_id, l.liked_id)))
+                    pairs.add(pair)
+        for u1, u2 in list(pairs)[:NUM_MATCHES]:
+            mid = generate_random_id('match')
+            match = Match(id=mid, user1_id=u1, user2_id=u2, created_at=datetime.utcnow())
+            session.add(match)
+        await session.commit()
+
+        # 5. Генерируем просмотры
+        for _ in range(NUM_VIEWS):
+            viewer, viewed = random.sample(all_ids, 2)
+            vid = generate_random_id('feed_view')
+            view = FeedView(id=vid, viewer_id=viewer, viewed_id=viewed, created_at=datetime.utcnow())
+            session.add(view)
+        await session.commit()
+
+    print("✅ DB seeded successfully")
+
+if __name__ == '__main__':
     asyncio.run(seed())
-

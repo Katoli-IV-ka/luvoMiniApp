@@ -1,5 +1,3 @@
-# services/instagram_service.py
-
 import requests
 from typing import Optional, List
 from fastapi import HTTPException
@@ -9,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from models.user import User
-from models.profile import Profile
 from models.instagram_data import InstagramData
 from models.instagram_connection import InstagramConnection
 
@@ -107,8 +104,8 @@ async def sync_instagram_subscriptions(
 
     # Шаг 4a: находим в Luvo-профилях совпадения по instagram_username
     result = await db.execute(
-        select(Profile.user_id)
-        .where(Profile.instagram_username.in_(following_usernames))
+        select(User.user_id)
+        .where(User.instagram_username.in_(following_usernames))
     )
     matching_ids = [r[0] for r in result.all()]
 
