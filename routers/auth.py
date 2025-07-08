@@ -31,19 +31,15 @@ async def login(
         raise HTTPException(status_code=400, detail="Missing 'user' in init_data")
     user_data = json.loads(user_obj)
     telegram_user_id = user_data.get("id")
-    telegram_username = user_data.get("username")
     if not telegram_user_id:
         raise HTTPException(status_code=400, detail="Invalid 'user' data in init_data")
 
+    # Ищем пользователя в БД, не создаём нового
     stmt = select(User).where(User.telegram_user_id == telegram_user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if not user:
-        user = User(telegram_user_id=telegram_user_id, telegram_username=telegram_username)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
+        raise HTTPException(status_code=403, detail="Аккаунт не создан")
 
     now = datetime.utcnow()
     expires = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -54,11 +50,10 @@ async def login(
     access_token = jwt.encode(
         token_payload,
         settings.TELEGRAM_BOT_TOKEN,
-        algorithm = "HS256"
+        algorithm="HS256"
     )
 
     expires_ms = int(expires.timestamp() * 1000)
-
     has_profile = bool(user.first_name)
 
     return TokenResponse(
