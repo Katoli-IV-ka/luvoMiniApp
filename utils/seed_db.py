@@ -62,7 +62,7 @@ async def seed():
     async with AsyncSessionLocal() as session:
         users = []
         for _ in range(NUM_USERS):
-            uid = generate_random_id('user')
+            uid = generate_random_id('users')
             user = User(
                 id=uid,
                 telegram_user_id=random.randint(100000, 999999),
@@ -87,7 +87,7 @@ async def seed():
             count = random.randint(1, min(MAX_PHOTOS_PER_USER, len(S3_KEYS)))
             keys = random.sample(S3_KEYS, count)
             for i, s3_key in enumerate(keys):
-                pid = generate_random_id('photo')
+                pid = generate_random_id('photos')
                 photo = Photo(
                     id=pid,
                     user_id=user.id,
@@ -107,7 +107,7 @@ async def seed():
             )
             if exists.scalar_one_or_none():
                 continue
-            lid = generate_random_id('like')
+            lid = generate_random_id('likes')
             like = Like(id=lid, liker_id=liker, liked_id=liked, created_at=datetime.utcnow())
             session.add(like)
         await session.commit()
@@ -121,7 +121,7 @@ async def seed():
                     pair = tuple(sorted((l.liker_id, l.liked_id)))
                     pairs.add(pair)
         for u1, u2 in list(pairs)[:NUM_MATCHES]:
-            mid = generate_random_id('match')
+            mid = generate_random_id('matches')
             match = Match(id=mid, user1_id=u1, user2_id=u2, created_at=datetime.utcnow())
             session.add(match)
         await session.commit()
@@ -129,7 +129,7 @@ async def seed():
         # 5. Генерируем просмотры
         for _ in range(NUM_VIEWS):
             viewer, viewed = random.sample(all_ids, 2)
-            vid = generate_random_id('feed_view')
+            vid = generate_random_id('feed_views')
             view = FeedView(id=vid, viewer_id=viewer, viewed_id=viewed, created_at=datetime.utcnow())
             session.add(view)
         await session.commit()
