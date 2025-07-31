@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 from .config import settings
 
+print(">>> DEBUG: raw DATABASE_URL =", settings.DATABASE_URL)
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,          # Чтобы в консоль выводились все SQL-запросы (для отладки, можно later выключить)
