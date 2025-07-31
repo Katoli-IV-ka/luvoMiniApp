@@ -26,5 +26,6 @@ ENV PYTHONUNBUFFERED=1
 # 5. Открываем порт (необязательно, но удобно для документации)
 EXPOSE 8000
 
-# 6. Запуск
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "debug"]
+# 6. Запуск (динамический порт)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level debug"]
+
