@@ -8,8 +8,9 @@ print(">>> DEBUG: raw DATABASE_URL =", settings.DATABASE_URL)
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,          # Чтобы в консоль выводились все SQL-запросы (для отладки, можно later выключить)
-    future=True         # Режим SQLAlchemy 2.0
+    echo=False,
+    future=True,
+    pool_pre_ping=True,      # <— добавили проверку соединения перед использованием
 )
 
 AsyncSessionLocal = async_sessionmaker(

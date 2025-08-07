@@ -50,10 +50,11 @@ async def on_startup():
     # Затем — сеем, если нужно
     if settings.SEED_DB:
         asyncio.create_task(seed())
-
-
-
-
 @app.get("/")
 async def root():
     return {"message": "Luvo MiniApp Backend"}
+
+@app.on_event("shutdown")
+async def shutdown():
+    # Закрываем все соединения пула
+    await engine.dispose()
