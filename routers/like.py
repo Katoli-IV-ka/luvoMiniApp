@@ -15,6 +15,10 @@ from models.feed_view import FeedView
 from schemas.like import LikeResponse
 from schemas.profile import ProfileRead, TopProfileRead
 from utils.s3 import build_photo_urls
+from services.telegram_service import (
+    send_like_notification,
+    send_match_notification,
+)
 
 router = APIRouter(prefix="", tags=["Likes"])
 
@@ -40,7 +44,12 @@ async def like_profile(
     if not target_profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    # 3) Сохраняем лайк, если его ещё нет
+    # 3) Получаем пользователя цели
+    target_user = await db.get(User, user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 4) Сохраняем лайк, если его ещё нет
     exists = await db.execute(
         select(LikeModel).where(
             LikeModel.liker_id == current_user.id,
@@ -53,7 +62,7 @@ async def like_profile(
         await db.commit()
         await db.refresh(new_like)
 
-    # 4) Проверяем взаимный лайк
+    # 5) Проверяем взаимный лайк
     rec = await db.execute(
         select(LikeModel).where(
             LikeModel.liker_id == user_id,
@@ -75,6 +84,10 @@ async def like_profile(
             await db.commit()
             await db.refresh(new_match)
 
+        # отправляем уведомления о мэтче обоим участникам
+        await send_match_notification(current_user.telegram_user_id)
+        await send_match_notification(target_user.telegram_user_id)
+
         # собираем данные для ответа
         urls = await build_photo_urls(target_profile.user_id, db)
         profile_read = ProfileRead(
@@ -91,7 +104,8 @@ async def like_profile(
         )
         return LikeResponse(matched=True, match_profile=profile_read)
 
-    # 5) Нет взаимки
+    # 6) Нет взаимки — уведомляем получателя лайка
+    await send_like_notification(target_user.telegram_user_id)
     return LikeResponse(matched=False)
 
 
