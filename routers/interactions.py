@@ -13,6 +13,7 @@ from models.match import Match as MatchModel
 from schemas.like import LikeResponse
 from schemas.user import UserRead, TopUserRead
 from utils.s3 import build_photo_urls
+from services.telegram_service import notify_like, notify_match
 
 
 router = APIRouter(prefix="/interactions", tags=["interactions"])
@@ -50,6 +51,9 @@ async def like_user(
 ) -> LikeResponse:
     if user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя лайкать себя")
+    liked_user = await db.get(User, user_id)
+    if not liked_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # 1) Добавляем лайк, если его не было
     existing = await db.execute(
@@ -59,11 +63,13 @@ async def like_user(
             LikeModel.liked_id == user_id,
         )
     )
+    is_new_like = False
     if existing.scalar_one() == 0:
         new_like = LikeModel(liker_id=current_user.id, liked_id=user_id)
         db.add(new_like)
         await db.commit()
         await db.refresh(new_like)
+        is_new_like = True
 
     # 2) Проверяем взаимный лайк
     mutual = await db.execute(
@@ -89,29 +95,33 @@ async def like_user(
             await db.commit()
             await db.refresh(new_match)
 
+            if liked_user.telegram_user_id:
+                await notify_match(liked_user.telegram_user_id)
+            if current_user.telegram_user_id:
+                await notify_match(current_user.telegram_user_id)
+
         # возвращаем информацию о пользователе для матча
-        matched = await db.get(User, user_id)
-        if not matched:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        urls = await build_photo_urls(matched.id, db)
+        urls = await build_photo_urls(liked_user.id, db)
         user_read = UserRead(
-            user_id=matched.id,
-            telegram_user_id=matched.telegram_user_id,
-            first_name=matched.first_name,
-            birthdate=matched.birthdate,
-            gender=matched.gender,
-            about=matched.about,
-            latitude=matched.latitude,
-            longitude=matched.longitude,
-            telegram_username=matched.telegram_username,
-            instagram_username=matched.instagram_username,
-            is_premium=matched.is_premium,
-            premium_expires_at=matched.premium_expires_at,
-            created_at=matched.created_at,
+            user_id=liked_user.id,
+            telegram_user_id=liked_user.telegram_user_id,
+            first_name=liked_user.first_name,
+            birthdate=liked_user.birthdate,
+            gender=liked_user.gender,
+            about=liked_user.about,
+            latitude=liked_user.latitude,
+            longitude=liked_user.longitude,
+            telegram_username=liked_user.telegram_username,
+            instagram_username=liked_user.instagram_username,
+            is_premium=liked_user.is_premium,
+            premium_expires_at=liked_user.premium_expires_at,
+            created_at=liked_user.created_at,
             photos=urls,
         )
         return LikeResponse(matched=True, match_user=user_read)
 
+    if is_new_like and liked_user.telegram_user_id:
+        await notify_like(liked_user.telegram_user_id)
     return LikeResponse(matched=False, match_user=None)
 
 
