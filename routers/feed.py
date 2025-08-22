@@ -1,6 +1,6 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, not_, or_
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
@@ -30,19 +30,19 @@ async def get_feed(
     sub_liked = select(LikeModel.liked_id).where(LikeModel.liker_id == current_user.id)
     sub_matched1 = select(MatchModel.user1_id).where(MatchModel.user2_id == current_user.id)
     sub_matched2 = select(MatchModel.user2_id).where(MatchModel.user1_id == current_user.id)
-
-    stmt = (
-        select(User)
-        .where(
-            User.id != current_user.id,
-            not_(User.id.in_(sub_liked)),
-            not_(User.id.in_(sub_matched1)),
-            not_(User.id.in_(sub_matched2)),
-        )
-        .order_by(User.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+    stmt = select(User).where(
+        User.id != current_user.id,
+        not_(User.id.in_(sub_liked)),
+        not_(User.id.in_(sub_matched1)),
+        not_(User.id.in_(sub_matched2)),
     )
+
+    if current_user.gender == "male":
+        stmt = stmt.where(User.gender == "female")
+    elif current_user.gender == "female":
+        stmt = stmt.where(User.gender == "male")
+
+    stmt = stmt.order_by(User.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     users = result.scalars().all()
 
