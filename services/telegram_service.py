@@ -55,7 +55,6 @@ async def notify_like(chat_id: int) -> None:
 async def notify_match(chat_id: int) -> None:
     await send_message(chat_id, "Совпадение! 🔥 У вас взаимный интерес — начни общение")
 
-
 def _poll_updates() -> None:
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/getUpdates"
     offset: Optional[int] = None
