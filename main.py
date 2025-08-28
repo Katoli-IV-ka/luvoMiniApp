@@ -7,6 +7,7 @@ from core.config import settings
 from core.database import engine
 from models.base import Base
 from utils.drop_db import async_drop_database
+from services.telegram_service import start_bot, stop_bot
 
 from routers.auth import router as auth_router
 from routers.user import router as user_router
@@ -50,6 +51,7 @@ async def on_startup():
     # Затем — сеем, если нужно
     if settings.SEED_DB:
         asyncio.create_task(seed())
+    start_bot()
 @app.get("/")
 async def root():
     return {"message": "Luvo MiniApp Backend"}
@@ -58,3 +60,4 @@ async def root():
 async def shutdown():
     # Закрываем все соединения пула
     await engine.dispose()
+    stop_bot()
