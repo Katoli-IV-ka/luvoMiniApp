@@ -1,6 +1,6 @@
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from core.config import settings
 
@@ -10,7 +10,13 @@ bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 
 main_keyboard = InlineKeyboardMarkup(
-    inline_keyboard=[[InlineKeyboardButton(text="Открыть Luvo", url=APP_LINK)]]
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Открыть Luvo", web_app=WebAppInfo(url=APP_LINK)
+            )
+        ]
+    ]
 )
 
 
