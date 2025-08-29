@@ -1,4 +1,5 @@
 from typing import List
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from models.match import Match as MatchModel
 from schemas.like import LikeResponse
 from schemas.user import UserRead, TopUserRead
 from utils.s3 import build_photo_urls
+from services.telegram_bot import send_like_notification, send_match_notification
 
 
 router = APIRouter(prefix="/interactions", tags=["interactions"])
@@ -59,11 +61,13 @@ async def like_user(
             LikeModel.liked_id == user_id,
         )
     )
+    like_added = False
     if existing.scalar_one() == 0:
         new_like = LikeModel(liker_id=current_user.id, liked_id=user_id)
         db.add(new_like)
         await db.commit()
         await db.refresh(new_like)
+        like_added = True
 
     # 2) Проверяем взаимный лайк
     mutual = await db.execute(
@@ -110,9 +114,20 @@ async def like_user(
             created_at=matched.created_at,
             photos=urls,
         )
+        if matched.telegram_user_id:
+            asyncio.create_task(send_match_notification(matched.telegram_user_id))
+        if current_user.telegram_user_id:
+            asyncio.create_task(send_match_notification(current_user.telegram_user_id))
+
         return LikeResponse(matched=True, match_user=user_read)
 
+    if like_added:
+        liked_user = await db.get(User, user_id)
+        if liked_user and liked_user.telegram_user_id:
+            asyncio.create_task(send_like_notification(liked_user.telegram_user_id))
+
     return LikeResponse(matched=False, match_user=None)
+
 
 
 @router.post(

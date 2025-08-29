@@ -15,6 +15,7 @@ from routers.interactions import router as interactions_router
 from routers.photos import router as photo_router
 
 from utils.seed_db import seed
+from services.telegram_bot import start_bot, bot
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
@@ -50,11 +51,15 @@ async def on_startup():
     # Затем — сеем, если нужно
     if settings.SEED_DB:
         asyncio.create_task(seed())
+
+    asyncio.create_task(start_bot())
+
 @app.get("/")
 async def root():
     return {"message": "Luvo MiniApp Backend"}
 
 @app.on_event("shutdown")
 async def shutdown():
+    await bot.session.close()
     # Закрываем все соединения пула
     await engine.dispose()
