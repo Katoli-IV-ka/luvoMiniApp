@@ -43,7 +43,7 @@ async def view_profile(
 @router.post(
     "/like/{user_id}",
     response_model=LikeResponse,
-    summary="Поставить лайк"
+    summary="Поставить или убрать лайк",
 )
 async def like_user(
     user_id: int,
@@ -53,23 +53,39 @@ async def like_user(
     if user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя лайкать себя")
 
-    # 1) Добавляем лайк, если его не было
-    existing = await db.execute(
-        select(func.count(LikeModel.id))
+    res = await db.execute(
+        select(LikeModel)
         .where(
             LikeModel.liker_id == current_user.id,
             LikeModel.liked_id == user_id,
         )
     )
-    like_added = False
-    if existing.scalar_one() == 0:
-        new_like = LikeModel(liker_id=current_user.id, liked_id=user_id)
-        db.add(new_like)
-        await db.commit()
-        await db.refresh(new_like)
-        like_added = True
+    like_obj = res.scalar_one_or_none()
 
-    # 2) Проверяем взаимный лайк
+    if like_obj:
+        await db.delete(like_obj)
+        await db.commit()
+
+        u1, u2 = sorted([current_user.id, user_id])
+        match_res = await db.execute(
+            select(MatchModel)
+            .where(
+                MatchModel.user1_id == u1,
+                MatchModel.user2_id == u2,
+            )
+        )
+        match_obj = match_res.scalar_one_or_none()
+        if match_obj:
+            await db.delete(match_obj)
+            await db.commit()
+
+        return LikeResponse(liked=False, matched=False, match_user=None)
+
+    new_like = LikeModel(liker_id=current_user.id, liked_id=user_id)
+    db.add(new_like)
+    await db.commit()
+    await db.refresh(new_like)
+
     mutual = await db.execute(
         select(func.count(LikeModel.id))
         .where(
@@ -78,7 +94,6 @@ async def like_user(
         )
     )
     if mutual.scalar_one() > 0:
-        # создаем матч при необходимости
         u1, u2 = sorted([current_user.id, user_id])
         match_check = await db.execute(
             select(func.count(MatchModel.id))
@@ -93,7 +108,6 @@ async def like_user(
             await db.commit()
             await db.refresh(new_match)
 
-        # возвращаем информацию о пользователе для матча
         matched = await db.get(User, user_id)
         if not matched:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -119,14 +133,13 @@ async def like_user(
         if current_user.telegram_user_id:
             asyncio.create_task(send_match_notification(current_user.telegram_user_id))
 
-        return LikeResponse(matched=True, match_user=user_read)
+        return LikeResponse(liked=True, matched=True, match_user=user_read)
 
-    if like_added:
-        liked_user = await db.get(User, user_id)
-        if liked_user and liked_user.telegram_user_id:
-            asyncio.create_task(send_like_notification(liked_user.telegram_user_id))
+    liked_user = await db.get(User, user_id)
+    if liked_user and liked_user.telegram_user_id:
+        asyncio.create_task(send_like_notification(liked_user.telegram_user_id))
 
-    return LikeResponse(matched=False, match_user=None)
+    return LikeResponse(liked=True, matched=False, match_user=None)
 
 
 

@@ -4,6 +4,7 @@ from schemas.user import UserRead
 
 
 class LikeResponse(BaseModel):
+    liked: bool
     matched: bool
     match_user: Optional[UserRead] = None
 
