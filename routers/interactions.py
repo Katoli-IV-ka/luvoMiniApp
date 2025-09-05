@@ -53,6 +53,8 @@ async def like_user(
     if user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя лайкать себя")
 
+
+    print(f' кто:  {current_user.id} \n кому: {user_id}')
     res = await db.execute(
         select(LikeModel)
         .where(
@@ -60,7 +62,10 @@ async def like_user(
             LikeModel.liked_id == user_id,
         )
     )
+
+
     like_obj = res.scalar_one_or_none()
+    print(like_obj)
 
     if like_obj:
         await db.delete(like_obj)
