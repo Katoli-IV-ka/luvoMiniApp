@@ -23,6 +23,11 @@ class User(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
 
+    # Показатели "Битвы привлекательности"
+    battle_wins = Column(Integer, default=0, nullable=False)
+    battle_losses = Column(Integer, default=0, nullable=False)
+    battle_rating = Column(Integer, default=0, nullable=False)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def __repr__(self):
