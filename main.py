@@ -13,6 +13,7 @@ from routers.user import router as user_router
 from routers.feed import router as feed_router
 from routers.interactions import router as interactions_router
 from routers.photos import router as photo_router
+from routers.battle import router as battle_router
 
 from utils.seed_db import seed
 from services.telegram_bot import start_bot, bot
@@ -36,6 +37,7 @@ app.include_router(user_router)
 app.include_router(feed_router)
 app.include_router(interactions_router)
 app.include_router(photo_router)
+app.include_router(battle_router)
 
 
 @app.on_event("startup")
