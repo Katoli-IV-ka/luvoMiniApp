@@ -47,7 +47,7 @@ class UserUpdate(BaseModel):
 
 
 class UserRead(UserBase):
-    user_id: int = Field(..., alias="user_id", description="PK в базе данных")
+    user_id: int = Field(..., alias="id", description="PK в базе данных")
 
     first_name: str = Field(..., max_length=100, description="Имя пользователя")
     birthdate: Optional[date] = Field(None, description="Дата рождения")
