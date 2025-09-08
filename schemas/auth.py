@@ -18,3 +18,9 @@ class TokenResponse(BaseModel):
     token_type: Literal["bearer"]
     has_profile: bool
     expires_in_ms: int
+
+
+class UsernameSchema(BaseModel):
+    """Схема запроса для получения JWT по telegram_username."""
+
+    telegram_username: str
