@@ -6,6 +6,7 @@ from core.database import get_db
 from models.user import User
 from schemas.battle import BattlePair
 from schemas.user import UserRead
+from utils.s3 import build_photo_urls
 
 router = APIRouter(prefix="/battle", tags=["battle"])
 
@@ -35,7 +36,25 @@ async def get_battle_pair(
     if len(users) < 2:
         raise HTTPException(status_code=404, detail="Недостаточно пользователей")
 
-    return BattlePair(
-        user=UserRead.model_validate(users[0]),
-        opponent=UserRead.model_validate(users[1]),
+    user_read = await _to_user_read(users[0], db)
+    opponent_read = await _to_user_read(users[1], db)
+    return BattlePair(user=user_read, opponent=opponent_read)
+
+async def _to_user_read(user: User, db: AsyncSession) -> UserRead:
+    photos = await build_photo_urls(user.id, db)
+    return UserRead(
+        user_id=user.id,
+        telegram_user_id=user.telegram_user_id,
+        first_name=user.first_name,
+        birthdate=user.birthdate,
+        gender=user.gender,
+        about=user.about,
+        photos=photos,
+        latitude=user.latitude,
+        longitude=user.longitude,
+        telegram_username=user.telegram_username,
+        instagram_username=user.instagram_username,
+        is_premium=user.is_premium,
+        premium_expires_at=user.premium_expires_at,
+        created_at=user.created_at,
     )
