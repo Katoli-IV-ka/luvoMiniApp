@@ -45,7 +45,7 @@ def random_username(prefix: str) -> str:
     return prefix + ''.join(random.choice(chars) for _ in range(8))
 
 
-async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos") -> None:
+async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos-v2") -> None:
     session = boto3.session.Session(
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
@@ -60,7 +60,7 @@ async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str 
         for obj in page.get("Contents", []):
             key = obj["Key"]
             # Только верхний уровень
-            if "demos/" in key[len(prefix):]:
+            if "demos-v2/" in key[len(prefix):]:
                 continue
             keys.append(key)
     if not keys:
