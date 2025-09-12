@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from core.security import get_current_user
 from models.user import User
+from models.battle_view import BattleView
 from schemas.battle import BattlePair
 from schemas.user import UserRead
 from utils.s3 import build_photo_urls
@@ -18,7 +21,26 @@ async def get_battle_pair(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BattlePair:
+    today = datetime.utcnow().date()
+    count_stmt = select(func.count(BattleView.id)).where(
+        BattleView.user_id == current_user.id,
+        func.date(BattleView.created_at) == today,
+    )
+    count_res = await db.execute(count_stmt)
+    battles_today = count_res.scalar_one()
+
     if winner_id is not None:
+        if battles_today >= 15:
+            raise HTTPException(status_code=403, detail="Батлы недоступны сегодня")
+
+        battle_view = BattleView(user_id=current_user.id)
+        db.add(battle_view)
+        await db.commit()
+        battles_today += 1
+
+        if battles_today >= 15:
+            raise HTTPException(status_code=403, detail="Батлы недоступны сегодня")
+
         winner = await db.get(User, winner_id)
         if winner is None:
             raise HTTPException(status_code=404, detail="Победитель не найден")
@@ -38,6 +60,9 @@ async def get_battle_pair(
         user_read = await _to_user_read(winner, db)
         opponent_read = await _to_user_read(opponent, db)
         return BattlePair(user=user_read, opponent=opponent_read)
+
+    if battles_today >= 15:
+        raise HTTPException(status_code=403, detail="Батлы недоступны сегодня")
 
     stmt = select(User).where(User.id != current_user.id)
     if current_user.gender == "male":
