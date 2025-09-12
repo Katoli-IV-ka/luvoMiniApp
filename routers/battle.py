@@ -25,10 +25,10 @@ async def get_battle_pair(
         opponent = result.scalar_one_or_none()
         if opponent is None:
             raise HTTPException(status_code=404, detail="Нет доступных соперников")
-        return BattlePair(
-            user=UserRead.model_validate(winner),
-            opponent=UserRead.model_validate(opponent),
-        )
+
+        user_read = await _to_user_read(winner, db)
+        opponent_read = await _to_user_read(opponent, db)
+        return BattlePair(user=user_read, opponent=opponent_read)
 
     stmt = select(User).order_by(func.random()).limit(2)
     result = await db.execute(stmt)
