@@ -1,6 +1,8 @@
 import asyncio
+import logging
+import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
@@ -14,6 +16,7 @@ from routers.feed import router as feed_router
 from routers.interactions import router as interactions_router
 from routers.photos import router as photo_router
 from routers.battle import router as battle_router
+from routers.health import router as health_router
 
 from utils.seed_db import seed
 from services.telegram_bot import start_bot, bot
@@ -32,12 +35,26 @@ app.add_middleware(
     allow_headers=["*"],        # Content-Type, Authorization и др.
 )
 
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.middleware("http")
+async def log_request_time(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"{request.method} {request.url.path} completed in {process_time:.2f} ms"
+    )
+    return response
+
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(feed_router)
 app.include_router(interactions_router)
 app.include_router(photo_router)
 app.include_router(battle_router)
+app.include_router(health_router)
 
 
 @app.on_event("startup")
