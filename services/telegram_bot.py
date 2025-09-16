@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from core.config import settings
 
-APP_LINK = "https://vitalycatt-luvo-mini-app-c7dd.twc1.net/"
+APP_LINK = "https://app.luvo.by/likes"
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()

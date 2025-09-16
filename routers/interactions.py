@@ -191,6 +191,7 @@ async def incoming_likes(
         .where(
             LikeModel.liked_id == current_user.id,
             LikeModel.is_ignored.is_(False),
+            LikeModel.liker_id != current_user.id,
         )
     )
     liker_ids = [row[0] for row in res.all()]
