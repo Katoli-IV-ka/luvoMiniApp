@@ -4,20 +4,26 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from core.config import settings
 
-APP_LINK = "https://vitalycatt-luvo-mini-app-c7dd.twc1.net/"
+LIKES_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/likes"
+FEED_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/feed"
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 
-main_keyboard = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Открыть Luvo", web_app=WebAppInfo(url=APP_LINK)
-            )
+def build_keyboard(url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Открыть Luvo", web_app=WebAppInfo(url=url)
+                )
+            ]
         ]
-    ]
-)
+    )
+
+
+feed_keyboard = build_keyboard(FEED_LINK)
+likes_keyboard = build_keyboard(LIKES_LINK)
 
 
 @dp.message(CommandStart())
@@ -27,21 +33,21 @@ async def cmd_start(message: types.Message) -> None:
         "мы помогаем найти новые знакомства по твоим подпискам в Instagram. "
         "Чтобы начать знакомиться, запусти приложение! 💫"
     )
-    await message.answer(text, reply_markup=main_keyboard)
+    await message.answer(text, reply_markup=feed_keyboard)
 
 
 async def send_like_notification(chat_id: int) -> None:
     await bot.send_message(
         chat_id,
         "Кому-то понравился твой профиль ❤️ Узнай, кто это",
-        reply_markup=main_keyboard,
+        reply_markup=likes_keyboard,
     )
 
 async def send_match_notification(chat_id: int) -> None:
     await bot.send_message(
         chat_id,
         "Совпадение! 🔥 У вас взаимный интерес — начни общение",
-        reply_markup=main_keyboard,
+        reply_markup=likes_keyboard,
     )
 
 
