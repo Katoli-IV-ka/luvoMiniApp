@@ -11,10 +11,7 @@ from models.instagram_data import InstagramData
 from models.instagram_connection import InstagramConnection
 
 # Настройки прокси и RapidAPI
-PROXIES = {
-    "http":  settings.PROXY,
-    "https": settings.PROXY,
-}
+PROXIES = settings.proxies
 API_HEADERS = {
     "x-rapidapi-key": settings.RAPIDAPI_KEY,
     "x-rapidapi-host": "instagram-scrapper-posts-reels-stories-downloader.p.rapidapi.com"

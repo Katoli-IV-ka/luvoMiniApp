@@ -10,7 +10,7 @@ from models.like import Like as LikeModel
 from models.match import Match as MatchModel
 from models.feed_view import FeedView
 from schemas.user import UserRead
-from utils.s3 import build_photo_urls
+from utils.user_helpers import to_user_reads
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
@@ -46,26 +46,7 @@ async def get_feed(
     result = await db.execute(stmt)
     users = result.scalars().all()
 
-    feed: List[UserRead] = []
-    for user in users:
-        photos = await build_photo_urls(user.id, db)
-        feed.append(UserRead(
-            user_id=user.id,
-            telegram_user_id=user.telegram_user_id,
-            first_name=user.first_name,
-            birthdate=user.birthdate,
-            gender=user.gender,
-            about=user.about,
-            latitude=user.latitude,
-            longitude=user.longitude,
-            telegram_username=user.telegram_username,
-            instagram_username=user.instagram_username,
-            is_premium=user.is_premium,
-            premium_expires_at=user.premium_expires_at,
-            created_at=user.created_at,
-            photos=photos,
-        ))
-    return feed
+    return await to_user_reads(users, db)
 
 
 
