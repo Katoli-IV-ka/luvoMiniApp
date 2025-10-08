@@ -55,7 +55,7 @@ async def upload_photo(
     await db.refresh(new_photo)
 
     # Формируем публичный URL
-    url = f"{settings.AWS_S3_ENDPOINT_URL.rstrip('/')}/{settings.AWS_S3_BUCKET_NAME}/{s3_key}"
+    url = f"{settings.s3_base_url}/{s3_key}"
 
     return PhotoRead(
         photo_id=new_photo.id,
@@ -82,7 +82,7 @@ async def list_photos(
         .order_by(Photo.created_at.asc())
     )).scalars().all()
 
-    base = f"{settings.AWS_S3_ENDPOINT_URL.rstrip('/')}/{settings.AWS_S3_BUCKET_NAME}"
+    base = settings.s3_base_url
     return [
         PhotoRead(
             photo_id=p.id,

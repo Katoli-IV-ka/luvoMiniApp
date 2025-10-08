@@ -13,7 +13,7 @@ from models.like import Like as LikeModel
 from models.match import Match as MatchModel
 from schemas.like import LikeResponse
 from schemas.user import UserRead, TopUserRead
-from utils.s3 import build_photo_urls
+from utils.user_helpers import to_top_user_read, to_user_read
 from services.telegram_bot import send_like_notification, send_match_notification
 
 
@@ -53,8 +53,6 @@ async def like_user(
     if user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя лайкать себя")
 
-
-    print(f' кто:  {current_user.id} \n кому: {user_id}')
     res = await db.execute(
         select(LikeModel)
         .where(
@@ -65,7 +63,6 @@ async def like_user(
 
 
     like_obj = res.scalar_one_or_none()
-    print(like_obj)
 
     if like_obj:
         await db.delete(like_obj)
@@ -116,23 +113,7 @@ async def like_user(
         matched = await db.get(User, user_id)
         if not matched:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        urls = await build_photo_urls(matched.id, db)
-        user_read = UserRead(
-            user_id=matched.id,
-            telegram_user_id=matched.telegram_user_id,
-            first_name=matched.first_name,
-            birthdate=matched.birthdate,
-            gender=matched.gender,
-            about=matched.about,
-            latitude=matched.latitude,
-            longitude=matched.longitude,
-            telegram_username=matched.telegram_username,
-            instagram_username=matched.instagram_username,
-            is_premium=matched.is_premium,
-            premium_expires_at=matched.premium_expires_at,
-            created_at=matched.created_at,
-            photos=urls,
-        )
+        user_read = await to_user_read(matched, db)
         if matched.telegram_user_id:
             asyncio.create_task(send_match_notification(matched.telegram_user_id))
         if current_user.telegram_user_id:
@@ -214,23 +195,7 @@ async def incoming_likes(
         user = await db.get(User, uid)
         if not user or not user.first_name:
             continue
-        urls = await build_photo_urls(uid, db)
-        output.append(UserRead(
-            user_id=user.id,
-            telegram_user_id=user.telegram_user_id,
-            first_name=user.first_name,
-            birthdate=user.birthdate,
-            gender=user.gender,
-            about=user.about,
-            latitude=user.latitude,
-            longitude=user.longitude,
-            telegram_username=user.telegram_username,
-            instagram_username=user.instagram_username,
-            is_premium=user.is_premium,
-            premium_expires_at=user.premium_expires_at,
-            created_at=user.created_at,
-            photos=urls,
-        ))
+        output.append(await to_user_read(user, db))
     return output
 
 
@@ -252,19 +217,7 @@ async def top_liked_users(
     rows = res.all()
     output: List[TopUserRead] = []
     for user, likes_count in rows:
-        urls = await build_photo_urls(user.id, db)
-        output.append(TopUserRead(
-            user_id=user.id,
-            first_name=user.first_name,
-            birthdate=user.birthdate,
-            gender=user.gender,
-            about=user.about,
-            telegram_username=user.telegram_username,
-            instagram_username=user.instagram_username,
-            photos=urls,
-            created_at=user.created_at,
-            likes_count=likes_count,
-        ))
+        output.append(await to_top_user_read(user, likes_count, db))
     return output
 
 
@@ -295,21 +248,5 @@ async def get_my_matches(
         if not user or not user.first_name:
             continue
 
-        photos = await build_photo_urls(other_id, db)
-        out.append(UserRead(
-            user_id=user.id,
-            telegram_user_id=user.telegram_user_id,
-            first_name=user.first_name,
-            birthdate=user.birthdate,
-            gender=user.gender,
-            about=user.about,
-            latitude=user.latitude,
-            longitude=user.longitude,
-            telegram_username=user.telegram_username,
-            instagram_username=user.instagram_username,
-            is_premium=user.is_premium,
-            premium_expires_at=user.premium_expires_at,
-            created_at=user.created_at,
-            photos=photos,
-        ))
+        out.append(await to_user_read(user, db))
     return out

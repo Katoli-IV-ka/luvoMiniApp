@@ -11,7 +11,7 @@ from core.config import settings
 from models.photo import Photo
 from utils.image_tools import compress_image_bytes
 
-_endpoint = settings.AWS_S3_ENDPOINT_URL.replace("https://", "").replace("http://", "")
+_endpoint = settings.s3_endpoint_host
 _s3 = Minio(
     _endpoint,
     access_key=settings.AWS_ACCESS_KEY_ID,
@@ -74,5 +74,5 @@ async def build_photo_urls(user_id: int, db: AsyncSession) -> list[str]:
     )
     keys = [row[0] for row in result.all()]
 
-    base = settings.AWS_S3_ENDPOINT_URL.rstrip("/") + "/" + settings.AWS_S3_BUCKET_NAME
+    base = settings.s3_base_url
     return [f"{base}/{key}" for key in keys]
