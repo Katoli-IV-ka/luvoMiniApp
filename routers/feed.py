@@ -30,11 +30,13 @@ async def get_feed(
     sub_liked = select(LikeModel.liked_id).where(LikeModel.liker_id == current_user.id)
     sub_matched1 = select(MatchModel.user1_id).where(MatchModel.user2_id == current_user.id)
     sub_matched2 = select(MatchModel.user2_id).where(MatchModel.user1_id == current_user.id)
+    sub_viewed = select(FeedView.viewed_id).where(FeedView.viewer_id == current_user.id)
     stmt = select(User).where(
         User.id != current_user.id,
         not_(User.id.in_(sub_liked)),
         not_(User.id.in_(sub_matched1)),
         not_(User.id.in_(sub_matched2)),
+        not_(User.id.in_(sub_viewed)),
     )
 
     if current_user.gender == "male":
