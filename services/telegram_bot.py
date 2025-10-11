@@ -1,3 +1,5 @@
+
+import asyncio
 import html
 import logging
 from dataclasses import dataclass
@@ -7,7 +9,13 @@ from typing import Optional
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import (
+    BufferedInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    WebAppInfo,
+)
+from aiohttp import ClientError, ClientSession
 from sqlalchemy import delete, or_, select
 
 from core.config import settings
@@ -137,7 +145,7 @@ def _format_selected_options_line(flags: int) -> str:
 
 def _format_result_line(is_approved: bool, performed: list[str], admin_username: str) -> str:
     status_symbol = "✅" if is_approved else "🚫"
-    actions = " / ".join(performed) if performed else ""
+    actions = "/".join(performed) if performed else "ничего не скрыто"
     return f"{status_symbol} [{actions}]: {admin_username}"
 
 
@@ -212,6 +220,97 @@ async def _get_general_photo_url(session, user_id: int) -> Optional[str]:
     return f"{settings.s3_base_url}/{photo.s3_key}"
 
 
+
+async def _download_photo(photo_url: str) -> Optional[BufferedInputFile]:
+    try:
+        async with ClientSession() as session:
+            async with session.get(photo_url, timeout=10) as response:
+                response.raise_for_status()
+                content = await response.read()
+    except (ClientError, asyncio.TimeoutError) as exc:
+        logger.warning(
+            "Failed to download photo %s for admin review: %s",
+            photo_url,
+            exc,
+            exc_info=exc,
+        )
+        return None
+
+    if not content:
+        return None
+
+    return BufferedInputFile(content, filename="profile.jpg")
+
+
+def _placeholder_photo_url() -> str:
+    return f"{settings.s3_base_url}/{settings.PLACEHOLDER_PHOTO_S3_KEY}"
+
+
+async def _try_send_admin_photo(
+    photo_source: object,
+    caption: str,
+    keyboard: InlineKeyboardMarkup,
+) -> bool:
+    try:
+        await bot.send_photo(
+            settings.ADMIN_REVIEW_CHAT_ID,
+            photo=photo_source,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+        )
+        return True
+    except TelegramAPIError as exc:
+        logger.warning("Failed to send review photo: %s", exc, exc_info=exc)
+        return False
+
+
+async def _send_admin_notification_with_fallback(
+    photo_url: Optional[str], caption: str, keyboard: InlineKeyboardMarkup
+) -> None:
+    attempted_urls: list[str] = []
+    if photo_url:
+        attempted_urls.append(photo_url)
+
+    placeholder_url = _placeholder_photo_url()
+    if placeholder_url and placeholder_url not in attempted_urls:
+        attempted_urls.append(placeholder_url)
+
+    for url in attempted_urls:
+        if await _try_send_admin_photo(url, caption, keyboard):
+            return
+
+        photo_file = await _download_photo(url)
+        if photo_file and await _try_send_admin_photo(photo_file, caption, keyboard):
+            return
+
+    try:
+        await bot.send_message(
+            settings.ADMIN_REVIEW_CHAT_ID,
+            text=caption,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+        )
+    except TelegramAPIError as exc:
+        logger.exception("Failed to send review notification", exc_info=exc)
+
+
+async def _edit_admin_message(
+    message: types.Message,
+    text: str,
+    keyboard: Optional[InlineKeyboardMarkup],
+) -> bool:
+    try:
+        if message.photo:
+            await message.edit_caption(text, parse_mode="HTML", reply_markup=keyboard)
+        else:
+            await message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        return True
+    except TelegramAPIError as exc:
+        logger.warning("Failed to update admin message: %s", exc, exc_info=exc)
+        return False
+
+
 async def notify_admin_about_new_user(user_id: int) -> None:
     if not settings.ADMIN_REVIEW_CHAT_ID:
         logger.warning("ADMIN_REVIEW_CHAT_ID is not configured")
@@ -224,24 +323,7 @@ async def notify_admin_about_new_user(user_id: int) -> None:
         photo_url = await _get_general_photo_url(session, user_id)
         caption = _build_profile_caption(snapshot)
         keyboard = _build_keyboard(user_id, 0)
-    try:
-        if photo_url:
-            await bot.send_photo(
-                settings.ADMIN_REVIEW_CHAT_ID,
-                photo=photo_url,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=keyboard,
-            )
-        else:
-            await bot.send_message(
-                settings.ADMIN_REVIEW_CHAT_ID,
-                text=caption,
-                parse_mode="HTML",
-                reply_markup=keyboard,
-            )
-    except TelegramAPIError as exc:
-        logger.exception("Failed to send review notification", exc_info=exc)
+    await _send_admin_notification_with_fallback(photo_url, caption, keyboard)
 
 
 async def _send_user_notification(telegram_user_id: int, text: str) -> None:
@@ -251,7 +333,6 @@ async def _send_user_notification(telegram_user_id: int, text: str) -> None:
         logger.warning(
             "Failed to notify user %s: %s", telegram_user_id, exc, exc_info=exc
         )
-
 
 def _build_actions_notification(performed_flags: list[int]) -> str:
     lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
@@ -344,14 +425,7 @@ async def handle_option_selection(callback: types.CallbackQuery) -> None:
     caption = _compose_caption(base_caption, status_line)
     keyboard = _build_keyboard(user_id, new_flags)
 
-    try:
-        await callback.message.edit_caption(  # type: ignore[union-attr]
-            caption,
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
-    except TelegramAPIError as exc:
-        logger.warning("Failed to update admin message: %s", exc, exc_info=exc)
+    if not await _edit_admin_message(callback.message, caption, keyboard):
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
@@ -394,14 +468,7 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
     status_line = _format_result_line(True, performed_labels, admin_name)
     caption = _compose_caption(base_caption, status_line)
 
-    try:
-        await callback.message.edit_caption(  # type: ignore[union-attr]
-            caption,
-            parse_mode="HTML",
-            reply_markup=None,
-        )
-    except TelegramAPIError as exc:
-        logger.warning("Failed to finalize admin message: %s", exc, exc_info=exc)
+    if not await _edit_admin_message(callback.message, caption, None):
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
@@ -441,14 +508,7 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
     status_line = _format_result_line(False, [], admin_name)
     caption = _compose_caption(base_caption, status_line)
 
-    try:
-        await callback.message.edit_caption(  # type: ignore[union-attr]
-            caption,
-            parse_mode="HTML",
-            reply_markup=None,
-        )
-    except TelegramAPIError as exc:
-        logger.warning("Failed to finalize admin message: %s", exc, exc_info=exc)
+    if not await _edit_admin_message(callback.message, caption, None):
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
