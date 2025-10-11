@@ -575,7 +575,7 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
             logger.exception("Failed to approve registration", exc_info=exc)
             await callback.answer("Не удалось подтвердить регистрацию", show_alert=True)
             return
-
+          
     base_caption = _build_profile_caption(snapshot)
     _remember_review_caption(callback.message, base_caption, overwrite=True)
     admin_name = _admin_username(callback.from_user)
