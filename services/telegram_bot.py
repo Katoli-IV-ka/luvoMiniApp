@@ -122,12 +122,19 @@ def _build_profile_caption(snapshot: UserProfileSnapshot) -> str:
         f"@{snapshot.telegram_username}" if snapshot.telegram_username else "—"
     )
     instagram = _escape(snapshot.instagram_username)
-    return (
-        f"<b>{first_name}</b>, {age_part}\n\n"
-        f"<i>{about}</i>\n\n"
-        f"tg: {tg_username}\n"
-        f"inst: {instagram or '—'}"
-    )
+
+    lines = [
+        f"👤<b>{first_name}</b>, {age_part}",
+        "",
+        f"tg: {tg_username}",
+        f"inst: {instagram}",
+    ]
+
+    about_text = (snapshot.about or "").strip()
+    if about_text:
+        lines.extend(["", f"✏️ Bio: <i>{html.escape(about_text)}</i>"])
+
+    return "\n".join(lines)
 
 
 def _compose_caption(base_caption: str, status_line: Optional[str]) -> str:
@@ -219,8 +226,7 @@ async def _get_general_photo_url(session, user_id: int) -> Optional[str]:
         return None
     return f"{settings.s3_base_url}/{photo.s3_key}"
 
-
-
+  
 async def _download_photo(photo_url: str) -> Optional[BufferedInputFile]:
     try:
         async with ClientSession() as session:
@@ -334,6 +340,7 @@ async def _send_user_notification(telegram_user_id: int, text: str) -> None:
             "Failed to notify user %s: %s", telegram_user_id, exc, exc_info=exc
         )
 
+        
 def _build_actions_notification(performed_flags: list[int]) -> str:
     lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
     actions_block = "\n".join(lines)
