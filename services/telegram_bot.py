@@ -8,7 +8,8 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters import CommandStart
+
+from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BufferedInputFile,
     InlineKeyboardButton,
@@ -29,13 +30,49 @@ from models.match import Match
 from models.photo import Photo
 from models.user import User
 
-LIKES_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/likes"
-FEED_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/feed"
+APP_BASE_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net"
+LIKES_LINK = f"{APP_BASE_LINK}/likes"
+FEED_LINK = f"{APP_BASE_LINK}/feed"
+CREATE_ACCOUNT_LINK = f"{APP_BASE_LINK}/onboarding"
+EDIT_PROFILE_LINK = f"{APP_BASE_LINK}/profile/edit"
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 
 logger = logging.getLogger(__name__)
+
+_review_message_bases: dict[tuple[int, int], str] = {}
+
+
+def _message_key(message: types.Message) -> Optional[tuple[int, int]]:
+    if not message.chat:
+        return None
+    return (message.chat.id, message.message_id)
+
+
+def _remember_review_caption(
+    message: types.Message, caption: str, *, overwrite: bool = False
+) -> None:
+    key = _message_key(message)
+    if key is None:
+        return
+    if overwrite or key not in _review_message_bases:
+        _review_message_bases[key] = caption
+
+
+def _get_review_caption(message: types.Message) -> Optional[str]:
+    key = _message_key(message)
+    if key is None:
+        return None
+    return _review_message_bases.get(key)
+
+
+def _forget_review_caption(message: types.Message) -> None:
+    key = _message_key(message)
+    if key is None:
+        return
+    _review_message_bases.pop(key, None)
+
 
 def build_keyboard(url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -96,6 +133,37 @@ BLOCK_NOTIFICATION_TEXT = (
     "у тебя больше не было неприятных ситуаций."
 )
 
+COMMUNITY_RULES_TEXT = (
+    "<b>Правила сообщества: вместе создадим безопасное пространство</b>\n\n"
+    "Добро пожаловать в наше сообщество! Наша главная цель — создать "
+    "доброжелательную и комфортную атмосферу для всех.\n\n"
+    "<b>📷 Ваш профиль: фотографии</b>\n"
+    "<b>✅ Что мы приветствуем:</b>\n"
+    "• Четкие и качественные фотографии, где вас хорошо видно\n"
+    "• Ваши настоящие фото\n\n"
+    "<b>❌ Что запрещено:</b>\n"
+    "• Контент для взрослых (18+)\n"
+    "• Деструктивный контент\n"
+    "• Фотографии других людей без согласия\n"
+    "• Политическая и коммерческая агитация\n\n"
+    "<b>👤 Ваше имя</b>\n"
+    "<b>✅ Что мы приветствуем:</b>\n"
+    "• Реальное имя (Мария, Александр)\n"
+    "• Имя, под которым вас знают друзья\n\n"
+    "<b>❌ Что запрещено:</b>\n"
+    "• Обезличенные ники (Кот_007, Аноним)\n"
+    "• Имена с рекламой или оскорблениями\n\n"
+    "<b>📝 Ваша анкета (Bio)</b>\n"
+    "<b>✅ Что мы приветствуем:</b>\n"
+    "• Доброжелательный рассказ о ваших увлечениях\n\n"
+    "<b>❌ Что запрещено:</b>\n"
+    "• Оскорбления и дискриминационные высказывания\n"
+    "• Разжигание ненависти\n"
+    "• Запрещенный контент\n\n"
+    "<b>Важно:</b> Профили, нарушающие эти правила, будут заблокированы.\n\n"
+    "Спасибо, что помогаете нам строить сообщество, основанное на уважении и доверии! 🤝"
+)
+
 
 def _calculate_age(birthdate: Optional[date]) -> Optional[int]:
     if not birthdate:
@@ -117,7 +185,6 @@ def _build_profile_caption(snapshot: UserProfileSnapshot) -> str:
     first_name = _escape(snapshot.first_name)
     age = _calculate_age(snapshot.birthdate)
     age_part = f"{age} лет" if age is not None else "— лет"
-    about = _escape(snapshot.about)
     tg_username = (
         f"@{snapshot.telegram_username}" if snapshot.telegram_username else "—"
     )
@@ -150,9 +217,16 @@ def _format_selected_options_line(flags: int) -> str:
     return "Выбраны опции: " + ", ".join(selected)
 
 
-def _format_result_line(is_approved: bool, performed: list[str], admin_username: str) -> str:
+def _format_result_line(
+    is_approved: bool, performed_flags: list[int], admin_username: str
+) -> str:
     status_symbol = "✅" if is_approved else "🚫"
-    actions = "/".join(performed) if performed else "ничего не скрыто"
+    performed_labels = [
+        OPTION_ACTION_LABELS[flag]
+        for flag in OPTION_ORDER
+        if flag in performed_flags
+    ]
+    actions = "/".join(performed_labels) if performed_labels else "ничего не скрыто"
     return f"{status_symbol} [{actions}]: {admin_username}"
 
 
@@ -226,7 +300,6 @@ async def _get_general_photo_url(session, user_id: int) -> Optional[str]:
         return None
     return f"{settings.s3_base_url}/{photo.s3_key}"
 
-  
 async def _download_photo(photo_url: str) -> Optional[BufferedInputFile]:
     try:
         async with ClientSession() as session:
@@ -256,24 +329,24 @@ async def _try_send_admin_photo(
     photo_source: object,
     caption: str,
     keyboard: InlineKeyboardMarkup,
-) -> bool:
+) -> Optional[types.Message]:
     try:
-        await bot.send_photo(
+        return await bot.send_photo(
             settings.ADMIN_REVIEW_CHAT_ID,
             photo=photo_source,
             caption=caption,
             parse_mode="HTML",
             reply_markup=keyboard,
         )
-        return True
     except TelegramAPIError as exc:
         logger.warning("Failed to send review photo: %s", exc, exc_info=exc)
-        return False
+        return None
+
 
 
 async def _send_admin_notification_with_fallback(
     photo_url: Optional[str], caption: str, keyboard: InlineKeyboardMarkup
-) -> None:
+) -> Optional[types.Message]:
     attempted_urls: list[str] = []
     if photo_url:
         attempted_urls.append(photo_url)
@@ -283,6 +356,18 @@ async def _send_admin_notification_with_fallback(
         attempted_urls.append(placeholder_url)
 
     for url in attempted_urls:
+        message = await _try_send_admin_photo(url, caption, keyboard)
+        if message:
+            return message
+
+        photo_file = await _download_photo(url)
+        if photo_file:
+            message = await _try_send_admin_photo(photo_file, caption, keyboard)
+            if message:
+                return message
+
+    try:
+        return await bot.send_message(
         if await _try_send_admin_photo(url, caption, keyboard):
             return
 
@@ -299,6 +384,7 @@ async def _send_admin_notification_with_fallback(
         )
     except TelegramAPIError as exc:
         logger.exception("Failed to send review notification", exc_info=exc)
+        return None
 
 
 async def _edit_admin_message(
@@ -329,6 +415,33 @@ async def notify_admin_about_new_user(user_id: int) -> None:
         photo_url = await _get_general_photo_url(session, user_id)
         caption = _build_profile_caption(snapshot)
         keyboard = _build_keyboard(user_id, 0)
+    message = await _send_admin_notification_with_fallback(
+        photo_url, caption, keyboard
+    )
+    if message:
+        _remember_review_caption(message, caption, overwrite=True)
+
+
+def _build_user_button(text: str, url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]]
+    )
+
+
+async def _send_user_notification(
+    telegram_user_id: int,
+    text: str,
+    *,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    parse_mode: Optional[str] = "HTML",
+) -> None:
+    try:
+        await bot.send_message(
+            chat_id=telegram_user_id,
+            text=text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
     await _send_admin_notification_with_fallback(photo_url, caption, keyboard)
 
 
@@ -340,6 +453,10 @@ async def _send_user_notification(telegram_user_id: int, text: str) -> None:
             "Failed to notify user %s: %s", telegram_user_id, exc, exc_info=exc
         )
 
+
+def _build_actions_notification(performed_flags: list[int]) -> str:
+    lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
+    actions_block = "\n\n".join(lines)
         
 def _build_actions_notification(performed_flags: list[int]) -> str:
     lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
@@ -351,6 +468,10 @@ def _build_actions_notification(performed_flags: list[int]) -> str:
         f"{actions_block}\n\n"
         "Но не переживай! Всё легко исправить.\n\n"
         "Просто зайди в раздел «О себе» и приведи анкету в соответствие с нашими правилами — "
+        "тогда всё сразу вернётся на свои места! 🛠️\n\n"
+        "Если нужно освежить в памяти правила, просто введи команду <code>/rule</code> — там "
+        "всё подробно написано!\n\n"
+        "Ждём тебя с обновлённым профилем! 😉"
         "тогда всё сразу вернётся на свои места! 🛠"
     )
 
@@ -426,6 +547,10 @@ async def handle_option_selection(callback: types.CallbackQuery) -> None:
         if not snapshot:
             await callback.answer("Пользователь не найден", show_alert=True)
             return
+        base_caption = _get_review_caption(callback.message)
+        if not base_caption:
+            base_caption = _build_profile_caption(snapshot)
+            _remember_review_caption(callback.message, base_caption)
         base_caption = _build_profile_caption(snapshot)
 
     status_line = _format_selected_options_line(new_flags)
@@ -465,6 +590,12 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
         updated_snapshot = await _fetch_snapshot(session, user_id)
 
     current_snapshot = updated_snapshot or snapshot
+    base_caption = _get_review_caption(callback.message)
+    if not base_caption:
+        base_caption = _build_profile_caption(current_snapshot)
+        _remember_review_caption(callback.message, base_caption)
+    admin_name = _admin_username(callback.from_user)
+    status_line = _format_result_line(True, performed_flags, admin_name)
     base_caption = _build_profile_caption(current_snapshot)
     admin_name = _admin_username(callback.from_user)
     performed_labels = [
@@ -481,6 +612,13 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
 
     if performed_flags:
         notification_text = _build_actions_notification(performed_flags)
+        await _send_user_notification(
+            current_snapshot.telegram_user_id,
+            notification_text,
+            reply_markup=_build_user_button("Редактировать профиль", EDIT_PROFILE_LINK),
+        )
+
+    _forget_review_caption(callback.message)
         await _send_user_notification(current_snapshot.telegram_user_id, notification_text)
 
     await callback.answer("Регистрация подтверждена")
@@ -512,6 +650,10 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
             return
 
     admin_name = _admin_username(callback.from_user)
+    base_caption = _get_review_caption(callback.message)
+    if not base_caption:
+        base_caption = _build_profile_caption(snapshot)
+        _remember_review_caption(callback.message, base_caption)
     status_line = _format_result_line(False, [], admin_name)
     caption = _compose_caption(base_caption, status_line)
 
@@ -519,6 +661,13 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
+    await _send_user_notification(
+        telegram_user_id,
+        BLOCK_NOTIFICATION_TEXT,
+        reply_markup=_build_user_button("Создать новый аккаунт", CREATE_ACCOUNT_LINK),
+        parse_mode=None,
+    )
+    _forget_review_caption(callback.message)
     await _send_user_notification(telegram_user_id, BLOCK_NOTIFICATION_TEXT)
     await callback.answer("Регистрация отклонена")
 
@@ -531,6 +680,11 @@ async def cmd_start(message: types.Message) -> None:
         "Чтобы начать знакомиться, запусти приложение! 💫"
     )
     await message.answer(text, reply_markup=feed_keyboard)
+
+
+@dp.message(Command("rule"))
+async def cmd_rule(message: types.Message) -> None:
+    await message.answer(COMMUNITY_RULES_TEXT, parse_mode="HTML")
 
 
 async def send_like_notification(chat_id: int) -> None:
