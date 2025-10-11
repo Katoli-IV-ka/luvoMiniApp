@@ -217,15 +217,22 @@ def _format_selected_options_line(flags: int) -> str:
 
 def _format_result_line(
     is_approved: bool, action_flags: list[int], admin_username: str
-) -> str:
-    status_symbol = "✅" if is_approved else "🚫"
+) -> str | None:
+    if not is_approved:
+        return None
+
+    status_symbol = "✅"
     performed_labels = [
         OPTION_ACTION_LABELS[flag]
         for flag in OPTION_ORDER
         if flag in action_flags
     ]
-    actions = "/".join(performed_labels) if performed_labels else "ничего не скрыто"
-    return f"{status_symbol} [{actions}]: {admin_username}"
+
+    if performed_labels:
+        actions = "/".join(performed_labels)
+        return f"{status_symbol} [{actions}]: {admin_username}"
+    else:
+        return f"{status_symbol}: {admin_username}"
 
 
 def _admin_username(user: types.User) -> str:
