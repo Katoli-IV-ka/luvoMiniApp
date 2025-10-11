@@ -7,7 +7,7 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BufferedInputFile,
     InlineKeyboardButton,
@@ -28,8 +28,11 @@ from models.match import Match
 from models.photo import Photo
 from models.user import User
 
-LIKES_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/likes"
-FEED_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/feed"
+APP_BASE_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net"
+LIKES_LINK = f"{APP_BASE_LINK}/likes"
+FEED_LINK = f"{APP_BASE_LINK}/feed"
+CREATE_ACCOUNT_LINK = f"{APP_BASE_LINK}/onboarding"
+EDIT_PROFILE_LINK = f"{APP_BASE_LINK}/profile/edit"
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
@@ -127,6 +130,37 @@ BLOCK_NOTIFICATION_TEXT = (
     "Прежде чем зарегистрироваться, используй команду /rule, чтобы ознакомиться с "
     "правилами нашего сообщества. Мы очень хотим, чтобы ты остался с нами, и чтобы "
     "у тебя больше не было неприятных ситуаций."
+)
+
+COMMUNITY_RULES_TEXT = (
+    "<b>Правила сообщества: вместе создадим безопасное пространство</b>\n\n"
+    "Добро пожаловать в наше сообщество! Наша главная цель — создать "
+    "доброжелательную и комфортную атмосферу для всех.\n\n"
+    "<b>📷 Ваш профиль: фотографии</b>\n"
+    "<b>✅ Что мы приветствуем:</b>\n"
+    "• Четкие и качественные фотографии, где вас хорошо видно\n"
+    "• Ваши настоящие фото\n\n"
+    "<b>❌ Что запрещено:</b>\n"
+    "• Контент для взрослых (18+)\n"
+    "• Деструктивный контент\n"
+    "• Фотографии других людей без согласия\n"
+    "• Политическая и коммерческая агитация\n\n"
+    "<b>👤 Ваше имя</b>\n"
+    "<b>✅ Что мы приветствуем:</b>\n"
+    "• Реальное имя (Мария, Александр)\n"
+    "• Имя, под которым вас знают друзья\n\n"
+    "<b>❌ Что запрещено:</b>\n"
+    "• Обезличенные ники (Кот_007, Аноним)\n"
+    "• Имена с рекламой или оскорблениями\n\n"
+    "<b>📝 Ваша анкета (Bio)</b>\n"
+    "<b>✅ Что мы приветствуем:</b>\n"
+    "• Доброжелательный рассказ о ваших увлечениях\n\n"
+    "<b>❌ Что запрещено:</b>\n"
+    "• Оскорбления и дискриминационные высказывания\n"
+    "• Разжигание ненависти\n"
+    "• Запрещенный контент\n\n"
+    "<b>Важно:</b> Профили, нарушающие эти правила, будут заблокированы.\n\n"
+    "Спасибо, что помогаете нам строить сообщество, основанное на уважении и доверии! 🤝"
 )
 
 
@@ -378,9 +412,26 @@ async def notify_admin_about_new_user(user_id: int) -> None:
         _remember_review_caption(message, caption, overwrite=True)
 
 
-async def _send_user_notification(telegram_user_id: int, text: str) -> None:
+def _build_user_button(text: str, url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]]
+    )
+
+
+async def _send_user_notification(
+    telegram_user_id: int,
+    text: str,
+    *,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    parse_mode: Optional[str] = "HTML",
+) -> None:
     try:
-        await bot.send_message(chat_id=telegram_user_id, text=text)
+        await bot.send_message(
+            chat_id=telegram_user_id,
+            text=text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
     except TelegramAPIError as exc:
         logger.warning(
             "Failed to notify user %s: %s", telegram_user_id, exc, exc_info=exc
@@ -389,7 +440,7 @@ async def _send_user_notification(telegram_user_id: int, text: str) -> None:
 
 def _build_actions_notification(performed_flags: list[int]) -> str:
     lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
-    actions_block = "\n".join(lines)
+    actions_block = "\n\n".join(lines)
     return (
         "Привет! 😊\n\n"
         "Пока мы проверяли аккаунты, заметили, что твой профиль немного выбивается из "
@@ -397,7 +448,10 @@ def _build_actions_notification(performed_flags: list[int]) -> str:
         f"{actions_block}\n\n"
         "Но не переживай! Всё легко исправить.\n\n"
         "Просто зайди в раздел «О себе» и приведи анкету в соответствие с нашими правилами — "
-        "тогда всё сразу вернётся на свои места! 🛠"
+        "тогда всё сразу вернётся на свои места! 🛠️\n\n"
+        "Если нужно освежить в памяти правила, просто введи команду <code>/rule</code> — там "
+        "всё подробно написано!\n\n"
+        "Ждём тебя с обновлённым профилем! 😉"
     )
 
 
@@ -528,7 +582,11 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
 
     if performed_flags:
         notification_text = _build_actions_notification(performed_flags)
-        await _send_user_notification(current_snapshot.telegram_user_id, notification_text)
+        await _send_user_notification(
+            current_snapshot.telegram_user_id,
+            notification_text,
+            reply_markup=_build_user_button("Редактировать профиль", EDIT_PROFILE_LINK),
+        )
 
     _forget_review_caption(callback.message)
     await callback.answer("Регистрация подтверждена")
@@ -571,7 +629,12 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
-    await _send_user_notification(telegram_user_id, BLOCK_NOTIFICATION_TEXT)
+    await _send_user_notification(
+        telegram_user_id,
+        BLOCK_NOTIFICATION_TEXT,
+        reply_markup=_build_user_button("Создать новый аккаунт", CREATE_ACCOUNT_LINK),
+        parse_mode=None,
+    )
     _forget_review_caption(callback.message)
     await callback.answer("Регистрация отклонена")
 
@@ -584,6 +647,11 @@ async def cmd_start(message: types.Message) -> None:
         "Чтобы начать знакомиться, запусти приложение! 💫"
     )
     await message.answer(text, reply_markup=feed_keyboard)
+
+
+@dp.message(Command("rule"))
+async def cmd_rule(message: types.Message) -> None:
+    await message.answer(COMMUNITY_RULES_TEXT, parse_mode="HTML")
 
 
 async def send_like_notification(chat_id: int) -> None:
