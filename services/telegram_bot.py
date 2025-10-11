@@ -528,10 +528,8 @@ async def handle_option_selection(callback: types.CallbackQuery) -> None:
         if not snapshot:
             await callback.answer("Пользователь не найден", show_alert=True)
             return
-        base_caption = _get_review_caption(callback.message)
-        if not base_caption:
-            base_caption = _build_profile_caption(snapshot)
-            _remember_review_caption(callback.message, base_caption)
+        base_caption = _build_profile_caption(snapshot)
+        _remember_review_caption(callback.message, base_caption, overwrite=True)
 
     status_line = _format_selected_options_line(new_flags)
     caption = _compose_caption(base_caption, status_line)
@@ -570,10 +568,8 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
         updated_snapshot = await _fetch_snapshot(session, user_id)
 
     current_snapshot = updated_snapshot or snapshot
-    base_caption = _get_review_caption(callback.message)
-    if not base_caption:
-        base_caption = _build_profile_caption(current_snapshot)
-        _remember_review_caption(callback.message, base_caption)
+    base_caption = _build_profile_caption(current_snapshot)
+    _remember_review_caption(callback.message, base_caption, overwrite=True)
     admin_name = _admin_username(callback.from_user)
     selected_flags = [flag for flag in OPTION_ORDER if flags & flag]
     status_line = _format_result_line(True, selected_flags, admin_name)
@@ -621,10 +617,8 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
             return
 
     admin_name = _admin_username(callback.from_user)
-    base_caption = _get_review_caption(callback.message)
-    if not base_caption:
-        base_caption = _build_profile_caption(snapshot)
-        _remember_review_caption(callback.message, base_caption)
+    base_caption = _build_profile_caption(snapshot)
+    _remember_review_caption(callback.message, base_caption, overwrite=True)
     status_line = _format_result_line(False, [], admin_name)
     caption = _compose_caption(base_caption, status_line)
 
