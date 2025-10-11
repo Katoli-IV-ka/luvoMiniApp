@@ -1,3 +1,4 @@
+
 import asyncio
 import html
 import logging
@@ -219,6 +220,7 @@ async def _get_general_photo_url(session, user_id: int) -> Optional[str]:
     return f"{settings.s3_base_url}/{photo.s3_key}"
 
 
+
 async def _download_photo(photo_url: str) -> Optional[BufferedInputFile]:
     try:
         async with ClientSession() as session:
@@ -331,7 +333,6 @@ async def _send_user_notification(telegram_user_id: int, text: str) -> None:
         logger.warning(
             "Failed to notify user %s: %s", telegram_user_id, exc, exc_info=exc
         )
-
 
 def _build_actions_notification(performed_flags: list[int]) -> str:
     lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
