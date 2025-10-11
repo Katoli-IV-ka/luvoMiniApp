@@ -1,3 +1,4 @@
+
 import asyncio
 import html
 import logging
@@ -7,6 +8,7 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramAPIError
+
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BufferedInputFile,
@@ -38,7 +40,6 @@ bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 
 logger = logging.getLogger(__name__)
-
 
 _review_message_bases: dict[tuple[int, int], str] = {}
 
@@ -299,7 +300,6 @@ async def _get_general_photo_url(session, user_id: int) -> Optional[str]:
         return None
     return f"{settings.s3_base_url}/{photo.s3_key}"
 
-
 async def _download_photo(photo_url: str) -> Optional[BufferedInputFile]:
     try:
         async with ClientSession() as session:
@@ -343,6 +343,7 @@ async def _try_send_admin_photo(
         return None
 
 
+
 async def _send_admin_notification_with_fallback(
     photo_url: Optional[str], caption: str, keyboard: InlineKeyboardMarkup
 ) -> Optional[types.Message]:
@@ -367,6 +368,15 @@ async def _send_admin_notification_with_fallback(
 
     try:
         return await bot.send_message(
+        if await _try_send_admin_photo(url, caption, keyboard):
+            return
+
+        photo_file = await _download_photo(url)
+        if photo_file and await _try_send_admin_photo(photo_file, caption, keyboard):
+            return
+
+    try:
+        await bot.send_message(
             settings.ADMIN_REVIEW_CHAT_ID,
             text=caption,
             parse_mode="HTML",
@@ -432,6 +442,12 @@ async def _send_user_notification(
             parse_mode=parse_mode,
             reply_markup=reply_markup,
         )
+    await _send_admin_notification_with_fallback(photo_url, caption, keyboard)
+
+
+async def _send_user_notification(telegram_user_id: int, text: str) -> None:
+    try:
+        await bot.send_message(chat_id=telegram_user_id, text=text)
     except TelegramAPIError as exc:
         logger.warning(
             "Failed to notify user %s: %s", telegram_user_id, exc, exc_info=exc
@@ -441,6 +457,10 @@ async def _send_user_notification(
 def _build_actions_notification(performed_flags: list[int]) -> str:
     lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
     actions_block = "\n\n".join(lines)
+        
+def _build_actions_notification(performed_flags: list[int]) -> str:
+    lines = [OPTION_NOTIFICATION_LINES[flag] for flag in OPTION_ORDER if flag in performed_flags]
+    actions_block = "\n".join(lines)
     return (
         "Привет! 😊\n\n"
         "Пока мы проверяли аккаунты, заметили, что твой профиль немного выбивается из "
@@ -452,6 +472,7 @@ def _build_actions_notification(performed_flags: list[int]) -> str:
         "Если нужно освежить в памяти правила, просто введи команду <code>/rule</code> — там "
         "всё подробно написано!\n\n"
         "Ждём тебя с обновлённым профилем! 😉"
+        "тогда всё сразу вернётся на свои места! 🛠"
     )
 
 
@@ -530,6 +551,7 @@ async def handle_option_selection(callback: types.CallbackQuery) -> None:
         if not base_caption:
             base_caption = _build_profile_caption(snapshot)
             _remember_review_caption(callback.message, base_caption)
+        base_caption = _build_profile_caption(snapshot)
 
     status_line = _format_selected_options_line(new_flags)
     caption = _compose_caption(base_caption, status_line)
@@ -574,6 +596,14 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
         _remember_review_caption(callback.message, base_caption)
     admin_name = _admin_username(callback.from_user)
     status_line = _format_result_line(True, performed_flags, admin_name)
+    base_caption = _build_profile_caption(current_snapshot)
+    admin_name = _admin_username(callback.from_user)
+    performed_labels = [
+        OPTION_ACTION_LABELS[flag]
+        for flag in OPTION_ORDER
+        if flag in performed_flags
+    ]
+    status_line = _format_result_line(True, performed_labels, admin_name)
     caption = _compose_caption(base_caption, status_line)
 
     if not await _edit_admin_message(callback.message, caption, None):
@@ -589,6 +619,8 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
         )
 
     _forget_review_caption(callback.message)
+        await _send_user_notification(current_snapshot.telegram_user_id, notification_text)
+
     await callback.answer("Регистрация подтверждена")
 
 
@@ -636,6 +668,7 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
         parse_mode=None,
     )
     _forget_review_caption(callback.message)
+    await _send_user_notification(telegram_user_id, BLOCK_NOTIFICATION_TEXT)
     await callback.answer("Регистрация отклонена")
 
 
