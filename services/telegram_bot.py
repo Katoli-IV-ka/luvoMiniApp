@@ -368,15 +368,6 @@ async def _send_admin_notification_with_fallback(
 
     try:
         return await bot.send_message(
-        if await _try_send_admin_photo(url, caption, keyboard):
-            return
-
-        photo_file = await _download_photo(url)
-        if photo_file and await _try_send_admin_photo(photo_file, caption, keyboard):
-            return
-
-    try:
-        await bot.send_message(
             settings.ADMIN_REVIEW_CHAT_ID,
             text=caption,
             parse_mode="HTML",
