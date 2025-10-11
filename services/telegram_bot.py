@@ -334,7 +334,7 @@ async def _try_send_admin_photo(
 ) -> Optional[types.Message]:
     try:
         return await bot.send_photo(
-            settings.ADMIN_REVIEW_CHAT_ID,
+            chat_id=settings.ADMIN_REVIEW_CHAT_ID,
             photo=photo_source,
             caption=caption,
             parse_mode="HTML",
@@ -369,7 +369,7 @@ async def _send_admin_notification_with_fallback(
 
     try:
         return await bot.send_message(
-            settings.ADMIN_REVIEW_CHAT_ID,
+            chat_id=settings.ADMIN_REVIEW_CHAT_ID,
             text=caption,
             parse_mode="HTML",
             reply_markup=keyboard,
@@ -381,14 +381,23 @@ async def _send_admin_notification_with_fallback(
 
 async def _edit_admin_message(
     message: types.Message,
-    text: str,
+    *,
+    caption: str,
     keyboard: Optional[InlineKeyboardMarkup],
 ) -> bool:
     try:
         if message.photo:
-            await message.edit_caption(text, parse_mode="HTML", reply_markup=keyboard)
+            await message.edit_caption(
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
         else:
-            await message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+            await message.edit_text(
+                text=caption,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
         return True
     except TelegramAPIError as exc:
         logger.warning("Failed to update admin message: %s", exc, exc_info=exc)
@@ -535,7 +544,11 @@ async def handle_option_selection(callback: types.CallbackQuery) -> None:
     caption = _compose_caption(base_caption, status_line)
     keyboard = _build_keyboard(user_id, new_flags)
 
-    if not await _edit_admin_message(callback.message, caption, keyboard):
+    if not await _edit_admin_message(
+        callback.message,
+        caption=caption,
+        keyboard=keyboard,
+    ):
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
@@ -575,7 +588,11 @@ async def handle_registration_approve(callback: types.CallbackQuery) -> None:
     status_line = _format_result_line(True, selected_flags, admin_name)
     caption = _compose_caption(base_caption, status_line)
 
-    if not await _edit_admin_message(callback.message, caption, None):
+    if not await _edit_admin_message(
+        callback.message,
+        caption=caption,
+        keyboard=None,
+    ):
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
@@ -622,7 +639,11 @@ async def handle_registration_decline(callback: types.CallbackQuery) -> None:
     status_line = _format_result_line(False, [], admin_name)
     caption = _compose_caption(base_caption, status_line)
 
-    if not await _edit_admin_message(callback.message, caption, None):
+    if not await _edit_admin_message(
+        callback.message,
+        caption=caption,
+        keyboard=None,
+    ):
         await callback.answer("Не удалось обновить сообщение", show_alert=True)
         return
 
