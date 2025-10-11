@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
     TELEGRAM_BOT_TOKEN: str
+    ADMIN_REVIEW_CHAT_ID: int
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
     AWS_S3_BUCKET_NAME: str
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     PROXY: Optional[str] = None
     RAPIDAPI_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
+    PLACEHOLDER_PHOTO_S3_KEY: str
+    PLACEHOLDER_NAME: str
+    PLACEHOLDER_BIO: str
 
     SEED_DB: bool
     RESET_DB_ON_STARTUP: bool
