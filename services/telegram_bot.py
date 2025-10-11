@@ -219,7 +219,7 @@ def _format_result_line(
     is_approved: bool, action_flags: list[int], admin_username: str
 ) -> str | None:
     if not is_approved:
-        return f"{status_symbol}: {admin_username}"
+        return f"🚫: {admin_username}"
 
     status_symbol = "✅"
     performed_labels = [
