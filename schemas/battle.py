@@ -3,9 +3,9 @@ from pydantic import BaseModel
 from .user import UserRead
 
 
-class BattlePair(BaseModel):
-    user: UserRead
-    opponent: UserRead
+class BattleStage(BaseModel):
+    stage: int
+    profiles: list[UserRead]
 
     class Config:
         from_attributes = True
