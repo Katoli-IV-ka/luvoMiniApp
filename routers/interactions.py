@@ -242,8 +242,17 @@ async def get_my_matches(
 
     out: List[UserRead] = []
     for match in matches:
+        # Пропускаем матчи, где оба участника — текущий пользователь
+        if match.user1_id == match.user2_id == current_user.id:
+            continue
+
         # Определяем ID другого пользователя в матче
         other_id = match.user2_id if match.user1_id == current_user.id else match.user1_id
+
+        # Дополнительная проверка, чтобы исключить попадание текущего пользователя в выдачу
+        if other_id == current_user.id:
+            continue
+
         user = await db.get(User, other_id)
         if not user or not user.first_name:
             continue
