@@ -67,11 +67,7 @@ async def get_battle_pair(
         battle_session.right_profile_id = None
         await db.commit()
         await db.refresh(battle_session)
-        winner = await db.get(User, winner_id)
-        if winner is None:
-            raise HTTPException(status_code=404, detail="Победитель не найден")
-        winner_read = await to_user_read(winner, db)
-        return BattleStage(stage=15, profiles=[winner_read])
+        return await _build_stage_response(db, battle_session)
 
     opponent = await _get_next_opponent(
         db,
@@ -117,12 +113,31 @@ async def _handle_completed_battle(
     *,
     winner_id: int | None,
 ) -> BattleStage:
-    return BattleStage(stage=15, profiles=[])
+    if battle_session.final_winner_id is None and winner_id is not None:
+        battle_session.final_winner_id = winner_id
+        battle_session.left_profile_id = None
+        battle_session.right_profile_id = None
+        await db.commit()
+        await db.refresh(battle_session)
+
+    return await _build_stage_response(db, battle_session)
 
 
 async def _build_stage_response(
     db: AsyncSession, battle_session: BattleSession
 ) -> BattleStage:
+    if battle_session.final_winner_id is not None:
+        winner = await db.get(User, battle_session.final_winner_id)
+        if winner is None:
+            raise HTTPException(status_code=404, detail="Победитель недоступен")
+        winner_read = await to_user_read(winner, db)
+        return BattleStage(
+            stage=15,
+            profiles=[],
+            final_winner=winner_read,
+            updated_at=battle_session.updated_at,
+        )
+
     profiles: list[UserRead] = []
 
     if battle_session.left_profile_id is not None:
@@ -141,7 +156,12 @@ async def _build_stage_response(
         raise HTTPException(status_code=404, detail="Недостаточно пользователей")
 
     stage_number = min(battle_session.completed_rounds + 1, 15)
-    return BattleStage(stage=stage_number, profiles=profiles)
+    return BattleStage(
+        stage=stage_number,
+        profiles=profiles,
+        final_winner=None,
+        updated_at=battle_session.updated_at,
+    )
 
 
 def _get_winner_position(
