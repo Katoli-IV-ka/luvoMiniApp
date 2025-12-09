@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     IMPORT_FROM_S3_PASSWORD: Optional[str] = None
-    DEBUG: bool
+    DEBUG: bool = False
 
     class Config:
         env_file = ".env"

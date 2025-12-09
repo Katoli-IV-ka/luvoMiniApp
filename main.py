@@ -61,9 +61,6 @@ app.include_router(admin_router)
 @app.on_event("startup")
 async def on_startup():
 
-    if settings.RESET_DB_ON_STARTUP :
-        await async_drop_database()
-
     # Сначала создаём все таблицы
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
