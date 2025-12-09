@@ -81,19 +81,30 @@ def verify_init_data(init_data: str, max_age_seconds: int = 86_400) -> dict:
     data_check_arr = [f"{key}={data[key]}" for key in sorted(data.keys())]
     data_check_string = "\n".join(data_check_arr)
 
-    secret_key = hmac.new(
-        key=b"WebAppData",
-        msg=settings.TELEGRAM_BOT_TOKEN.encode("utf-8"),
-        digestmod=hashlib.sha256
-    ).digest()
+    candidate_tokens = [settings.TELEGRAM_BOT_TOKEN]
+    if settings.DEBUG:
+        candidate_tokens.extend(settings.get_debug_telegram_bot_tokens())
 
-    computed_hash = hmac.new(
-        key=secret_key,
-        msg=data_check_string.encode("utf-8"),
-        digestmod=hashlib.sha256
-    ).hexdigest()
+    signature_valid = False
 
-    if not hmac.compare_digest(computed_hash, hash_received):
+    for token in candidate_tokens:
+        secret_key = hmac.new(
+            key=b"WebAppData",
+            msg=token.encode("utf-8"),
+            digestmod=hashlib.sha256
+        ).digest()
+
+        computed_hash = hmac.new(
+            key=secret_key,
+            msg=data_check_string.encode("utf-8"),
+            digestmod=hashlib.sha256
+        ).hexdigest()
+
+        if hmac.compare_digest(computed_hash, hash_received):
+            signature_valid = True
+            break
+
+    if not signature_valid:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid init_data signature"

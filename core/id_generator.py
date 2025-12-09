@@ -7,6 +7,8 @@ TYPE_POSTFIX = {
     "likes": 4,
     "matches": 5,
     "feed_views": 6,
+    "battles": 7,
+    "battle_sessions": 8,
 }
 
 
