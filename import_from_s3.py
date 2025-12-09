@@ -45,7 +45,7 @@ def random_username(prefix: str) -> str:
     return prefix + ''.join(random.choice(chars) for _ in range(8))
 
 
-async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos-v2") -> None:
+async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos") -> None:
     session = boto3.session.Session(
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
