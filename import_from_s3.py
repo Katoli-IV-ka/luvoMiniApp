@@ -4,7 +4,6 @@ import string
 from datetime import datetime, timedelta, date, timezone
 from itertools import cycle
 
-
 import boto3
 
 from core.config import settings
@@ -37,7 +36,7 @@ def clean_names(names):
     return result
 
 NAMES = clean_names(RAW_NAMES)
-ABOUT_TEMPLATES = ["😊", "🚀", "🎨", "🎶", "☕", "📚", "Путешествую", "Люблю кофе", "🌟", "😎"]
+ABOUT_TEMPLATES = ["😊", "🚀", "🎨", "", "🎶", "", "☕", "📚", "Путешествую", "Люблю кофе", "🌟", "😎", "", "", "", ")"]
 
 
 def random_username(prefix: str) -> str:
@@ -45,7 +44,12 @@ def random_username(prefix: str) -> str:
     return prefix + ''.join(random.choice(chars) for _ in range(8))
 
 
-async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos-v2") -> None:
+async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos") -> int:
+    normalized_prefix = prefix.strip("/")
+    if not normalized_prefix:
+        raise ValueError("Prefix (folder) must not be empty")
+    prefix_for_query = f"{normalized_prefix}/" if not normalized_prefix.endswith("/") else normalized_prefix
+
     session = boto3.session.Session(
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
@@ -54,18 +58,19 @@ async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str 
     s3 = session.client("s3", endpoint_url=settings.AWS_S3_ENDPOINT_URL)
 
     paginator = s3.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix_for_query)
     keys: list[str] = []
     for page in pages:
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            # Только верхний уровень
-            if "demos-v2/" in key[len(prefix):]:
+            relative_key = key[len(prefix_for_query):].lstrip("/")
+            # Только верхний уровень внутри указанной папки
+            if "/" in relative_key:
                 continue
             keys.append(key)
     if not keys:
         print("Нет файлов для импорта")
-        return
+        return 0
 
     name_cycle = cycle(NAMES)
     today = date.today()
@@ -101,7 +106,9 @@ async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str 
             db.add(photo)
 
         await db.commit()
-    print(f"Импортировано пользователей: {len(keys)}")
+    imported = len(keys)
+    print(f"Импортировано пользователей: {imported}")
+    return imported
 
 
 if __name__ == "__main__":

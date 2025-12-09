@@ -17,8 +17,8 @@ from routers.interactions import router as interactions_router
 from routers.photos import router as photo_router
 from routers.battle import router as battle_router
 from routers.health import router as health_router
+from routers.admin import router as admin_router
 
-from utils.seed_db import seed
 from services.telegram_bot import start_bot, bot
 
 app = FastAPI(
@@ -55,6 +55,7 @@ app.include_router(interactions_router)
 app.include_router(photo_router)
 app.include_router(battle_router)
 app.include_router(health_router)
+app.include_router(admin_router)
 
 
 @app.on_event("startup")
@@ -66,10 +67,6 @@ async def on_startup():
     # Сначала создаём все таблицы
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    # Затем — сеем, если нужно
-    if settings.SEED_DB:
-        asyncio.create_task(seed())
 
     asyncio.create_task(start_bot())
 

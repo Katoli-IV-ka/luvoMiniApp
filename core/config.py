@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic.v1 import BaseSettings
 
 
@@ -14,7 +16,7 @@ class Settings(BaseSettings):
     RAPIDAPI_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
-    SEED_DB: bool
+    IMPORT_FROM_S3_PASSWORD: Optional[str] = None
     RESET_DB_ON_STARTUP: bool
     DEBUG: bool
 
