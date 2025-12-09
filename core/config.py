@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     IMPORT_FROM_S3_PASSWORD: Optional[str] = None
-    RESET_DB_ON_STARTUP: bool
     DEBUG: bool
 
     class Config:

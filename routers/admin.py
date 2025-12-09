@@ -3,8 +3,14 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from core.config import settings
-from utils.seed_users import import_from_s3
-from schemas.import_job import ImportFromS3Request, ImportFromS3Response
+from import_from_s3 import import_from_s3
+from schemas.import_job import (
+    ImportFromS3Request,
+    ImportFromS3Response,
+    ResetDbRequest,
+    ResetDbResponse,
+)
+from utils.drop_db import async_drop_database
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 logger = logging.getLogger("uvicorn.error")
@@ -36,3 +42,25 @@ async def trigger_import_from_s3(payload: ImportFromS3Request) -> ImportFromS3Re
         raise HTTPException(status_code=500, detail="Не удалось выполнить импорт") from exc
 
     return ImportFromS3Response(folder=normalized_folder, imported=imported)
+
+
+@router.post(
+    "/reset-db",
+    response_model=ResetDbResponse,
+    summary="Очистить базу (drop schema) и пересоздать таблицы",
+)
+async def reset_db(payload: ResetDbRequest) -> ResetDbResponse:
+    if not settings.IMPORT_FROM_S3_PASSWORD:
+        logger.warning("Попытка очистки БД при не настроенном IMPORT_FROM_S3_PASSWORD")
+        raise HTTPException(status_code=503, detail="Пароль для админ-операций не настроен")
+
+    if payload.password != settings.IMPORT_FROM_S3_PASSWORD:
+        raise HTTPException(status_code=403, detail="Неверный пароль")
+
+    try:
+        await async_drop_database()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Очистка БД завершилась ошибкой: %s", exc)
+        raise HTTPException(status_code=500, detail="Не удалось очистить базу") from exc
+
+    return ResetDbResponse(status="ok")
