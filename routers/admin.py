@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from core.config import settings
-from import_from_s3 import import_from_s3
+from utils.seed_users import seed_users
 from schemas.import_job import (
     ImportFromS3Request,
     ImportFromS3Response,
@@ -34,7 +34,7 @@ async def trigger_import_from_s3(payload: ImportFromS3Request) -> ImportFromS3Re
 
     normalized_folder = payload.folder.strip("/")
     try:
-        imported = await import_from_s3(prefix=normalized_folder)
+        imported = await seed_users(prefix=normalized_folder)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001

@@ -44,7 +44,7 @@ def random_username(prefix: str) -> str:
     return prefix + ''.join(random.choice(chars) for _ in range(8))
 
 
-async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos") -> int:
+async def seed_users(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str = "demos") -> int:
     normalized_prefix = prefix.strip("/")
     if not normalized_prefix:
         raise ValueError("Prefix (folder) must not be empty")
@@ -112,4 +112,4 @@ async def import_from_s3(bucket: str = settings.AWS_S3_BUCKET_NAME, prefix: str 
 
 
 if __name__ == "__main__":
-    asyncio.run(import_from_s3())
+    asyncio.run(seed_users())
