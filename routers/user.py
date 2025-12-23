@@ -168,6 +168,16 @@ async def update_my_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    def _clean_value(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    country = _clean_value(country)
+    city = _clean_value(city)
+    district = _clean_value(district)
+
     if first_name is not None:
         current_user.first_name = first_name
     if birthdate is not None:
@@ -312,4 +322,3 @@ async def update_my_location(
         is_premium=current_user.is_premium,
         created_at=current_user.created_at,
     )
-
