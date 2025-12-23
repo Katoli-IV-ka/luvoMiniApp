@@ -22,9 +22,11 @@ class User(Base):
     telegram_username = Column(String(64), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    country = Column(String(64), nullable=True)
+    city = Column(String(64), nullable=True)
+    district = Column(String(128), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def __repr__(self):
         return f"<User id={self.id} telegram_id={self.telegram_user_id}>"
-

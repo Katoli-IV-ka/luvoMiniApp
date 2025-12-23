@@ -18,6 +18,7 @@ from routers.photos import router as photo_router
 from routers.battle import router as battle_router
 from routers.health import router as health_router
 from routers.admin import router as admin_router
+from routers.location import router as location_router
 
 from services.telegram_bot import start_bot, bot
 
@@ -54,6 +55,7 @@ app.include_router(feed_router)
 app.include_router(interactions_router)
 app.include_router(photo_router)
 app.include_router(battle_router)
+app.include_router(location_router)
 app.include_router(health_router)
 app.include_router(admin_router)
 
