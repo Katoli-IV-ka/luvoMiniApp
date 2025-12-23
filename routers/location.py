@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from utils.locations import get_countries, get_cities, get_districts
+from utils.locations import LOCATION_DATA, get_countries, get_cities, get_districts
 
 router = APIRouter(prefix="/locations", tags=["locations"])
 
@@ -27,3 +27,8 @@ async def list_districts(
     if not districts:
         raise HTTPException(status_code=404, detail="Город не найден")
     return districts
+
+
+@router.get("", response_model=dict, summary="Полное дерево локаций")
+async def get_location_tree() -> dict:
+    return LOCATION_DATA
