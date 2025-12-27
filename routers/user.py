@@ -164,6 +164,8 @@ async def update_my_profile(
     country: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
     district: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
     photos: Optional[List[UploadFile]] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -190,6 +192,10 @@ async def update_my_profile(
         current_user.telegram_username = telegram_username
     if instagram_username is not None:
         current_user.instagram_username = instagram_username
+    if latitude is not None:
+        current_user.latitude = latitude
+    if longitude is not None:
+        current_user.longitude = longitude
     if any(value is not None for value in (country, city, district)):
         if not all(value is not None for value in (country, city, district)):
             raise HTTPException(
@@ -300,6 +306,10 @@ async def update_my_location(
     current_user.country = payload.country
     current_user.city = payload.city
     current_user.district = payload.district
+    if payload.latitude is not None:
+        current_user.latitude = payload.latitude
+    if payload.longitude is not None:
+        current_user.longitude = payload.longitude
 
     db.add(current_user)
     await db.commit()
