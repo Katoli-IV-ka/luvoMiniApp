@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from core.config import settings
 
+
 BASE_URL = settings.MINI_APP_BASE_URL.rstrip("/")
 LIKES_LINK = f"{BASE_URL}/likes"
 FEED_LINK = f"{BASE_URL}/feed"
