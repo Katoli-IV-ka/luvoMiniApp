@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     AWS_S3_REGION: str
     PROXY: str
     RAPIDAPI_KEY: str
+    MINI_APP_BASE_URL: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     IMPORT_FROM_S3_PASSWORD: Optional[str] = None
