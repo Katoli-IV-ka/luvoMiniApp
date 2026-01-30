@@ -4,8 +4,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from core.config import settings
 
-LIKES_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/likes"
-FEED_LINK = "https://vitalycatt-luvo-mini-app-da35.twc1.net/feed"
+
+BASE_URL = settings.MINI_APP_BASE_URL.rstrip("/")
+LIKES_LINK = f"{BASE_URL}/likes"
+FEED_LINK = f"{BASE_URL}/feed"
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()

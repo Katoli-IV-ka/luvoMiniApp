@@ -17,7 +17,9 @@ from models.user import User
 from models.photo import Photo
 from schemas.auth import InitDataSchema, TokenResponse
 from schemas.user import UserRead, UserCreate, UserUpdate
+from schemas.location import LocationUpdate
 from utils.s3 import upload_file_to_s3, build_photo_urls
+from utils.locations import validate_location
 
 router = APIRouter(prefix="/users", tags=["users"])  #(prefix="/users", tags=["users"])
 
@@ -135,6 +137,9 @@ async def read_my_profile(
         birthdate=current_user.birthdate,
         gender=current_user.gender,
         about=current_user.about,
+        country=current_user.country,
+        city=current_user.city,
+        district=current_user.district,
         telegram_username=current_user.telegram_username,
         instagram_username=current_user.instagram_username,
         photos=photos,
@@ -156,10 +161,25 @@ async def update_my_profile(
     about: Optional[str] = Form(None),
     telegram_username: Optional[str] = Form(None),
     instagram_username: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    district: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
     photos: Optional[List[UploadFile]] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    def _clean_value(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    country = _clean_value(country)
+    city = _clean_value(city)
+    district = _clean_value(district)
+
     if first_name is not None:
         current_user.first_name = first_name
     if birthdate is not None:
@@ -172,6 +192,21 @@ async def update_my_profile(
         current_user.telegram_username = telegram_username
     if instagram_username is not None:
         current_user.instagram_username = instagram_username
+    if latitude is not None:
+        current_user.latitude = latitude
+    if longitude is not None:
+        current_user.longitude = longitude
+    if any(value is not None for value in (country, city, district)):
+        if not all(value is not None for value in (country, city, district)):
+            raise HTTPException(
+                status_code=400,
+                detail="Для обновления локации нужны country, city и district",
+            )
+        if not validate_location(country, city, district):
+            raise HTTPException(status_code=400, detail="Некорректная локация")
+        current_user.country = country
+        current_user.city = city
+        current_user.district = district
 
     db.add(current_user)
     await db.commit()
@@ -209,6 +244,9 @@ async def update_my_profile(
         birthdate=current_user.birthdate,
         gender=current_user.gender,
         about=current_user.about,
+        country=current_user.country,
+        city=current_user.city,
+        district=current_user.district,
         telegram_username=current_user.telegram_username,
         instagram_username=current_user.instagram_username,
         photos=photos,
@@ -241,6 +279,9 @@ async def read_user_profile(
         birthdate=user.birthdate,
         gender=user.gender,
         about=user.about,
+        country=user.country,
+        city=user.city,
+        district=user.district,
         telegram_username=user.telegram_username,
         instagram_username=user.instagram_username,
         photos=photos,
@@ -249,3 +290,45 @@ async def read_user_profile(
     )
 
 
+@router.put(
+    "/me/location",
+    response_model=UserRead,
+    summary="Обновить локацию пользователя"
+)
+async def update_my_location(
+    payload: LocationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not validate_location(payload.country, payload.city, payload.district):
+        raise HTTPException(status_code=400, detail="Некорректная локация")
+
+    current_user.country = payload.country
+    current_user.city = payload.city
+    current_user.district = payload.district
+    if payload.latitude is not None:
+        current_user.latitude = payload.latitude
+    if payload.longitude is not None:
+        current_user.longitude = payload.longitude
+
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+
+    photos = await build_photo_urls(current_user.id, db)
+    return UserRead(
+        user_id=current_user.id,
+        telegram_user_id=current_user.telegram_user_id,
+        first_name=current_user.first_name,
+        birthdate=current_user.birthdate,
+        gender=current_user.gender,
+        about=current_user.about,
+        country=current_user.country,
+        city=current_user.city,
+        district=current_user.district,
+        telegram_username=current_user.telegram_username,
+        instagram_username=current_user.instagram_username,
+        photos=photos,
+        is_premium=current_user.is_premium,
+        created_at=current_user.created_at,
+    )

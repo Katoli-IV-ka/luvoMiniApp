@@ -12,18 +12,39 @@ from utils.s3 import build_photo_urls
 router = APIRouter(prefix="/battle", tags=["battle"])
 
 
+def _ensure_location(user: User) -> None:
+    if not all([user.country, user.city, user.district]):
+        raise HTTPException(
+            status_code=400,
+            detail="Для участия в батлах нужно выбрать локацию",
+        )
+
+
 @router.get("/pair", response_model=BattlePair, summary="Получить пару профилей для баттла")
 async def get_battle_pair(
     winner_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BattlePair:
+    _ensure_location(current_user)
     if winner_id is not None:
         winner = await db.get(User, winner_id)
         if winner is None:
             raise HTTPException(status_code=404, detail="Победитель не найден")
+        if (winner.country, winner.city, winner.district) != (
+            current_user.country,
+            current_user.city,
+            current_user.district,
+        ):
+            raise HTTPException(status_code=400, detail="Победитель из другой локации")
 
-        stmt = select(User).where(User.id != winner_id, User.id != current_user.id)
+        stmt = select(User).where(
+            User.id != winner_id,
+            User.id != current_user.id,
+            User.country == current_user.country,
+            User.city == current_user.city,
+            User.district == current_user.district,
+        )
         if current_user.gender == "male":
             stmt = stmt.where(User.gender == "female")
         elif current_user.gender == "female":
@@ -39,7 +60,12 @@ async def get_battle_pair(
         opponent_read = await _to_user_read(opponent, db)
         return BattlePair(user=user_read, opponent=opponent_read)
 
-    stmt = select(User).where(User.id != current_user.id)
+    stmt = select(User).where(
+        User.id != current_user.id,
+        User.country == current_user.country,
+        User.city == current_user.city,
+        User.district == current_user.district,
+    )
     if current_user.gender == "male":
         stmt = stmt.where(User.gender == "female")
     elif current_user.gender == "female":
@@ -67,6 +93,9 @@ async def _to_user_read(user: User, db: AsyncSession) -> UserRead:
         photos=photos,
         latitude=user.latitude,
         longitude=user.longitude,
+        country=user.country,
+        city=user.city,
+        district=user.district,
         telegram_username=user.telegram_username,
         instagram_username=user.instagram_username,
         is_premium=user.is_premium,
