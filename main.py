@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,12 +21,31 @@ from routers.health import router as health_router
 from routers.admin import router as admin_router
 from routers.location import router as location_router
 
-from services.telegram_bot import start_bot, bot
+from services.telegram_bot import bot, start_bot
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Сначала создаём все таблицы
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    app.state.bot_task = asyncio.create_task(start_bot())
+    try:
+        yield
+    finally:
+        app.state.bot_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await app.state.bot_task
+        await bot.session.close()
+        # Закрываем все соединения пула
+        await engine.dispose()
+
 
 app = FastAPI(
     title="Luvo MiniApp Backend",
     version="0.1.0",
-    description="Backend для Telegram Mini-App «Luvo»"
+    description="Backend для Telegram Mini-App «Luvo»",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -59,22 +79,6 @@ app.include_router(location_router)
 app.include_router(health_router)
 app.include_router(admin_router)
 
-
-@app.on_event("startup")
-async def on_startup():
-
-    # Сначала создаём все таблицы
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    asyncio.create_task(start_bot())
-
 @app.get("/")
 async def root():
     return {"message": "Luvo MiniApp Backend"}
-
-@app.on_event("shutdown")
-async def shutdown():
-    await bot.session.close()
-    # Закрываем все соединения пула
-    await engine.dispose()
